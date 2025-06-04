@@ -19,6 +19,7 @@ or explain what a prop (get; set;) is but more overall comments that will help m
 how the program is working from an intermediate student's standpoint
 * I will always update the spec.md sheet
 * Follow the spec.md sheet as your main guide and use the Outline.md sheet to reference for more details
+* For each instruction, please also include the code I should implement in addition to the Instructions and explanation.
 
 
 

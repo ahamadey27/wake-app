@@ -77,14 +77,14 @@
     - [x] Install NuGet packages: System.Net.Http, Newtonsoft.Json/System.Text.Json.
 - [x] **Step 1.2: Basic User Interface (UI) Design**
     - [x] Develop minimal frontend (date input, submit button, results display area).
-- [ ] **Step 1.3: Implement Tide Service (TideService.cs)**
-    - [ ] Create `TideService.cs`.
-    - [ ] Implement method for NOAA API request (date, station ID 8519482, product=predictions, datum=MLLW, time_zone=lst_ldt, units=english, format=json).
-    - [ ] Implement JSON parsing and C# models for tide data.
-    - [ ] Implement filtering for tide height ≤ 2 feet.
-- [ ] **Step 1.4: Integrate Tide Service with Backend Logic**
-    - [ ] Invoke `TideService` from Controller/PageModel on user submission.
-    - [ ] Pass processed tide info to UI.
+- [x] **Step 1.3: Implement Tide Service (TideService.cs)**
+    - [x] Create `TideService.cs`.
+    - [x] Implement method for NOAA API request (date, station ID 8519482, product=predictions, datum=MLLW, time_zone=lst_ldt, units=english, format=json).
+    - [x] Implement JSON parsing and C# models for tide data.
+    - [x] Implement filtering for tide height ≤ 2 feet.
+- [x] **Step 1.4: Integrate Tide Service with Backend Logic**
+    - [x] Invoke `TideService` from Controller/PageModel on user submission.
+    - [x] Pass processed tide info to UI.
 - [ ] **Step 1.5: Configuration Management**
     - [ ] Store API endpoints, etc., using `appsettings.json` or environment variables.
 - [x] **Step 1.6: Add About Page**
