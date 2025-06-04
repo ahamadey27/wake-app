@@ -5,6 +5,16 @@
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <h1 class="display-4">Hudson River Southbound Freighter Wake Advisor</h1>
+    <form method="post">
+        <!-- Date input for user to select the target date -->
+        <label for="dateInput">Select Date:</label>
+        <input type="date" id="dateInput" name="SelectedDate" required />
+        <!-- Button to submit the form and trigger the check -->
+        <button type="submit">Check Conditions</button>
+    </form>
+    <!-- Area to display results (tide status, freighter info) -->
+    <div id="resultsArea" style="margin-top: 2em;">
+        <!-- Results will be shown here after backend logic is implemented -->
+    </div>
 </div>

@@ -41,6 +41,12 @@ To develop an ASP.NET web application that identifies optimal times for wake sur
 **Action:** Securely store any necessary configuration values (e.g., API endpoints, future API keys).
 **Method:** Utilize ASP.NET Core's configuration system (`appsettings.json`, environment variables, user secrets for development).
 
+### Step 1.6: Add About Page
+**Action:** Create an About page that describes the project, its purpose, and the technology stack used.
+**Details:**
+* The About page should be accessible from the main navigation.
+* It should explain the goal of the project and its educational/recreational context.
+
 ---
 
 ## Phase 2: Freighter Data - AIS Provider Research & Initial API Setup

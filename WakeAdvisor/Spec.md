@@ -75,8 +75,8 @@
     - [x] Create new ASP.NET Core project.
     - [x] Initialize Git repository.
     - [x] Install NuGet packages: System.Net.Http, Newtonsoft.Json/System.Text.Json.
-- [ ] **Step 1.2: Basic User Interface (UI) Design**
-    - [ ] Develop minimal frontend (date input, submit button, results display area).
+- [x] **Step 1.2: Basic User Interface (UI) Design**
+    - [x] Develop minimal frontend (date input, submit button, results display area).
 - [ ] **Step 1.3: Implement Tide Service (TideService.cs)**
     - [ ] Create `TideService.cs`.
     - [ ] Implement method for NOAA API request (date, station ID 8519482, product=predictions, datum=MLLW, time_zone=lst_ldt, units=english, format=json).
@@ -87,6 +87,8 @@
     - [ ] Pass processed tide info to UI.
 - [ ] **Step 1.5: Configuration Management**
     - [ ] Store API endpoints, etc., using `appsettings.json` or environment variables.
+- [x] **Step 1.6: Add About Page**
+    - [x] Create an About page describing the project purpose and technology stack.
 
 ## Phase 2: Freighter Data - AIS Provider Research & Initial API Setup
 - [ ] **Step 2.1: Research and Select AIS Data Provider**
