@@ -24,35 +24,58 @@ namespace WakeAdvisor.Services
             // Build the NOAA API request URL for the selected date and station
             string apiUrl = $"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=WakeAdvisor&begin_date={date:yyyyMMdd}&end_date={date:yyyyMMdd}&datum=MLLW&station={StationId}&time_zone=lst_ldt&units=english&interval=h&format=json";
 
-            // Make the HTTP GET request to the NOAA API
-            var response = await _httpClient.GetAsync(apiUrl);
-            response.EnsureSuccessStatusCode();
-
-            // Parse the JSON response into C# objects
-            var json = await response.Content.ReadAsStringAsync();
-            var tideData = JsonSerializer.Deserialize<TidePredictionData>(json);
-
-            // Filter for times when tide height is ≤ 2 feet
-            var lowTideWindows = new List<LowTideWindow>();
-            if (tideData?.Predictions == null)
+            try
             {
-                // Return an empty list or handle the error as appropriate
+                // Make the HTTP GET request to the NOAA API
+                var response = await _httpClient.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+
+                // Parse the JSON response into C# objects
+                var json = await response.Content.ReadAsStringAsync();
+                var tideData = JsonSerializer.Deserialize<TidePredictionData>(json);
+
+                // Filter for times when tide height is ≤ 2 feet
+                var lowTideWindows = new List<LowTideWindow>();
+                if (tideData?.Predictions == null)
+                {
+                    // Return an empty list or handle the error as appropriate
+                    return new List<LowTideWindow>();
+                }
+                foreach (var prediction in tideData.Predictions)
+                {
+                    if (!string.IsNullOrEmpty(prediction?.Value) && double.TryParse(prediction.Value, out double height) && height <= 2.0)
+                    {
+                        // For today's date, filter out times that have already passed
+                        if (date.Date == DateTime.Now.Date)
+                        {
+                            if (DateTime.TryParse(prediction.Time, out DateTime predictionTime) && predictionTime > DateTime.Now)
+                            {
+                                lowTideWindows.Add(new LowTideWindow
+                                {
+                                    Time = prediction.Time,
+                                    Height = height
+                                });
+                            }
+                        }
+                        else
+                        {
+                            // For future dates, add all low tide windows
+                            lowTideWindows.Add(new LowTideWindow
+                            {
+                                Time = prediction.Time,
+                                Height = height
+                            });
+                        }
+                    }
+                }
+                return lowTideWindows;
+            }
+            catch (HttpRequestException ex)
+            {
+                // If the API returns a 400 Bad Request or other error, handle it gracefully
+                // Log the error if needed and return an empty list
                 return new List<LowTideWindow>();
             }
-            foreach (var prediction in tideData.Predictions)
-            {
-                if (!string.IsNullOrEmpty(prediction?.Value) && double.TryParse(prediction.Value, out double height) && height <= 2.0)
-                {
-                    // Add to the list of low tide windows
-                    lowTideWindows.Add(new LowTideWindow
-                    {
-                        Time = prediction.Time,
-                        Height = height
-                    });
-                }
-            }
-
-            return lowTideWindows;
         }
     }
 
