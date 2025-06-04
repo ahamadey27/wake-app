@@ -1,12 +1,12 @@
 # Project Plan: Hudson River Southbound Freighter Wake Advisor
 
 ## Overall Goal
-To develop an ASP.NET web application that identifies optimal times for wake surfing behind southbound freighters on the Hudson River near Kingston, NY, by correlating low tide conditions (≤ 2 feet) with predicted southbound freighter approaches.
+To develop an ASP.NET web application that identifies optimal times for wake surfing behind southbound freighters on the Hudson River near Kingston, NY, by correlating low tide conditions (≤ 2 feet) with predicted southbound freighter approaches. The application only supports tide predictions for today's date (no future date predictions).
 
 ---
 
 ## Phase 1: Core Setup & Tide Data Integration
-**Objective:** Establish the project foundation, create a basic user interface, and implement reliable fetching and display of tide information from NOAA for Kingston, NY.
+**Objective:** Establish the project foundation, create a basic user interface, and implement reliable fetching and display of tide information from NOAA for Kingston, NY. The UI and backend are now restricted to only allow and process today's date.
 
 ### Step 1.1: Project Initialization & Environment Setup
 **Action:** Create a new ASP.NET Core project (MVC, Razor Pages, or Blazor).
@@ -18,7 +18,7 @@ To develop an ASP.NET web application that identifies optimal times for wake sur
 ### Step 1.2: Basic User Interface (UI) Design
 **Action:** Develop a minimal frontend for user interaction.
 **Key Elements:**
-* A date input field/picker.
+* A date input field/picker restricted to today's date only.
 * A "Check Conditions" submit button.
 * A clearly defined area to display results (tide status, freighter information).
 **Focus:** Prioritize functionality over aesthetics at this stage.
@@ -26,11 +26,11 @@ To develop an ASP.NET web application that identifies optimal times for wake sur
 ### Step 1.3: Implement Tide Service (`TideService.cs`)
 **Action:** Create a dedicated C# service class to encapsulate all tide-related logic.
 **Core Functionality:**
-* Method to accept a target date and location (Kingston, NY; NOAA Station ID `8519482` "Kingston Point, Hudson River, NY").
-* Construct the API request URL for the `NOAA CO-OPS API` (parameters: `date=YYYYMMDD`, `station=8519482`, `product=predictions`, `datum=MLLW`, `time_zone=lst_ldt`, `units=english`, `format=json`).
+* Method to accept only today's date and location (Kingston, NY; NOAA Station ID `8519482`).
+* Construct the API request URL for the `NOAA CO-OPS API` for today only.
 * Execute an HTTP GET request to the NOAA API.
 * Parse the JSON response, creating C# models to represent the tide data structure.
-* Filter tide predictions to identify time windows when the tide height is at or below 2 feet.
+* Filter tide predictions to identify time windows when the tide height is at or below 2 feet and only show future times for today.
 **Output:** A list of suitable low-tide windows or a message if none are found.
 
 ### Step 1.4: Integrate Tide Service with Backend Logic
@@ -104,8 +104,8 @@ To develop an ASP.NET web application that identifies optimal times for wake sur
 
 ### Step 3.4: Handle Date-Specific Logic (Near-Term vs. Far-Future)
 **Action:** Differentiate behavior based on the user's selected date:
-* **For "Today" or "Tomorrow"** (or a very short window like 24-48 hours): Execute the live AIS API calls and the full filtering/ETA calculation logic.
-* **For Dates Further in the Future:** Do not attempt live AIS calls. Instead, return a clear message to the user indicating that specific freighter predictions are not feasible that far in advance (e.g., "Live freighter tracking is only available for the near future. Please check back 1-2 days before your desired date.").
+* **For "Today"** (or a very short window like 24 hours): Execute the live AIS API calls and the full filtering/ETA calculation logic.
+* **For Dates Beyond Today:** Do not attempt live AIS calls. Instead, return a clear message to the user indicating that specific freighter predictions are not feasible (e.g., "Live freighter tracking is only available for today.").
 
 ### Step 3.5: Integrate Filtered Freighter Data with UI
 **Action:** In the Controller/PageModel, after confirming suitable low tide conditions:
@@ -151,9 +151,7 @@ To develop an ASP.NET web application that identifies optimal times for wake sur
 ### Step 5.2: User Acceptance Testing (UAT)
 **Action:** As the primary user (or with other potential users), conduct thorough end-to-end testing.
 **Scenarios to Test:**
-* Various dates (today, tomorrow, far future).
-* Dates with known low tides.
-* Dates with no low tides.
+* Today's date with various tide conditions.
 * (If possible during testing with live AIS) Scenarios where southbound freighters are expected/not expected.
 **Verification:** Confirm accuracy of tide info, freighter detection (especially southbound logic), ETA calculations, and all UI messages.
 

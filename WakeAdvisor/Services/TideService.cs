@@ -21,8 +21,15 @@ namespace WakeAdvisor.Services
         // Retrieves low tide windows for the specified date
         public async Task<List<LowTideWindow>> GetLowTideWindowsAsync(DateTime date)
         {
-            // Build the NOAA API request URL for the selected date and station
-            string apiUrl = $"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=WakeAdvisor&begin_date={date:yyyyMMdd}&end_date={date:yyyyMMdd}&datum=MLLW&station={StationId}&time_zone=lst_ldt&units=english&interval=h&format=json";
+            // Always use today's date for tide predictions
+            var today = DateTime.Now.Date;
+            if (date.Date != today)
+            {
+                // If a non-today date is passed, return an empty list
+                return new List<LowTideWindow>();
+            }
+            // Build the NOAA API request URL for today's date and station
+            string apiUrl = $"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=WakeAdvisor&begin_date={today:yyyyMMdd}&end_date={today:yyyyMMdd}&datum=MLLW&station={StationId}&time_zone=lst_ldt&units=english&interval=h&format=json";
 
             // Debug: Output the full API URL being used
             Console.WriteLine("API URL: " + apiUrl);

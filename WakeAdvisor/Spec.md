@@ -1,6 +1,6 @@
 # Project: Hudson River Southbound Freighter Wake Advisor
 
-**Goal:** To develop an ASP.NET web application that identifies optimal times for wake surfing behind southbound freighters on the Hudson River near Kingston, NY, by correlating low tide conditions (≤ 2 feet) with predicted southbound freighter approaches.
+**Goal:** To develop an ASP.NET web application that identifies optimal times for wake surfing behind southbound freighters on the Hudson River near Kingston, NY, by correlating low tide conditions (≤ 2 feet) with predicted southbound freighter approaches. The application now only supports tide predictions for today's date (no future date predictions).
 
 ---
 
@@ -77,13 +77,14 @@
     - [x] Install NuGet packages: System.Net.Http, Newtonsoft.Json/System.Text.Json.
 - [x] **Step 1.2: Basic User Interface (UI) Design**
     - [x] Develop minimal frontend (date input, submit button, results display area).
+    - [x] Restrict UI to only allow today's date for tide predictions.
 - [x] **Step 1.3: Implement Tide Service (TideService.cs)**
     - [x] Create `TideService.cs`.
-    - [x] Implement method for NOAA API request (date, station ID 8519482, product=predictions, datum=MLLW, time_zone=lst_ldt, units=english, format=json).
+    - [x] Implement method for NOAA API request (today's date only).
     - [x] Implement JSON parsing and C# models for tide data.
-    - [x] Implement filtering for tide height ≤ 2 feet.
+    - [x] Implement filtering for tide height ≤ 2 feet and only show future times for today.
 - [x] **Step 1.4: Integrate Tide Service with Backend Logic**
-    - [x] Invoke `TideService` from Controller/PageModel on user submission.
+    - [x] Invoke `TideService` from Controller/PageModel on page load or user submission.
     - [x] Pass processed tide info to UI.
 - [ ] **Step 1.5: Configuration Management**
     - [ ] Store API endpoints, etc., using `appsettings.json` or environment variables.

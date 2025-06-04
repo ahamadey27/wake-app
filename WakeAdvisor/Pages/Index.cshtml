@@ -7,12 +7,15 @@
 <div class="text-center">
     <h1 class="display-4">Hudson River Southbound Freighter Wake Advisor</h1>
     <form method="post">
-        <!-- Date input for user to select the target date -->
-        <label for="dateInput">Select Date:</label>
-        <input type="date" id="dateInput" name="SelectedDate" required />
+        <!-- Date input for user to select the target date (restricted to today) -->
+        <label for="dateInput">Today's Date:</label>
+        <input type="date" id="dateInput" name="SelectedDate" value="@DateTime.Now.ToString("yyyy-MM-dd")" readonly />
         <!-- Button to submit the form and trigger the check -->
         <button type="submit">Check Conditions</button>
     </form>
+    <p style="color: #888; font-size: 0.95em;">
+        Note: Tide predictions are only available for today. Future date predictions are not supported.
+    </p>
     <!-- Area to display results (tide status, freighter info) -->
     <div id="resultsArea" style="margin-top: 2em;">
         @if (Model.LowTideWindows != null && Model.LowTideWindows.Any())
