@@ -24,6 +24,9 @@ namespace WakeAdvisor.Services
             // Build the NOAA API request URL for the selected date and station
             string apiUrl = $"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=WakeAdvisor&begin_date={date:yyyyMMdd}&end_date={date:yyyyMMdd}&datum=MLLW&station={StationId}&time_zone=lst_ldt&units=english&interval=h&format=json";
 
+            // Debug: Output the full API URL being used
+            Console.WriteLine("API URL: " + apiUrl);
+
             try
             {
                 // Make the HTTP GET request to the NOAA API
@@ -33,6 +36,10 @@ namespace WakeAdvisor.Services
                 // Parse the JSON response into C# objects
                 var json = await response.Content.ReadAsStringAsync();
                 var tideData = JsonSerializer.Deserialize<TidePredictionData>(json);
+
+                // Debug: Output the raw API response and number of predictions
+                Console.WriteLine("Raw API response: " + json);
+                Console.WriteLine("Number of predictions: " + (tideData?.Predictions?.Count ?? 0));
 
                 // Filter for times when tide height is ≤ 2 feet
                 var lowTideWindows = new List<LowTideWindow>();
