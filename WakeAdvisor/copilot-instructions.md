@@ -17,6 +17,8 @@ more code for that step unless instructed otherwise.
 * Add intermediate level comments to the code. So, no need to specify "this is a variable" 
 or explain what a prop (get; set;) is but more overall comments that will help me understand 
 how the program is working from an intermediate student's standpoint
+* I will always update the spec.md sheet
+* Follow the spec.md sheet as your main guide and use the Outline.md sheet to reference for more details
 
 
 
