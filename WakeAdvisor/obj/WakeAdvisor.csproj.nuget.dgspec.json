@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\WakeAdvisor\\WakeAdvisor\\WakeAdvisor.csproj": {}
+    "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\wake-app\\WakeAdvisor\\WakeAdvisor.csproj": {}
   },
   "projects": {
-    "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\WakeAdvisor\\WakeAdvisor\\WakeAdvisor.csproj": {
+    "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\wake-app\\WakeAdvisor\\WakeAdvisor.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\WakeAdvisor\\WakeAdvisor\\WakeAdvisor.csproj",
+        "projectUniqueName": "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\wake-app\\WakeAdvisor\\WakeAdvisor.csproj",
         "projectName": "WakeAdvisor",
-        "projectPath": "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\WakeAdvisor\\WakeAdvisor\\WakeAdvisor.csproj",
+        "projectPath": "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\wake-app\\WakeAdvisor\\WakeAdvisor.csproj",
         "packagesPath": "C:\\Users\\hamad\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\WakeAdvisor\\WakeAdvisor\\obj\\",
+        "outputPath": "C:\\Users\\hamad\\Documents\\GitHub\\wake-app\\wake-app\\WakeAdvisor\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -50,6 +50,20 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
+          "dependencies": {
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.3, )"
+            },
+            "System.Net.Http": {
+              "target": "Package",
+              "version": "[4.3.4, )"
+            },
+            "System.Text.Json": {
+              "target": "Package",
+              "version": "[10.0.0-preview.4.25258.110, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
