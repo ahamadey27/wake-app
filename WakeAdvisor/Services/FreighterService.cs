@@ -111,8 +111,39 @@ namespace WakeAdvisor.Services
         // Stub for AIS API call (to be implemented)
         private Task<List<AISVesselData>> GetAISVesselsAsync(DateTime date)
         {
-            // TODO: Implement actual API call and parsing
-            return Task.FromResult(new List<AISVesselData>());
+            // Mock data: a few sample vessels near Kingston, NY
+            var mockVessels = new List<AISVesselData>
+            {
+                new AISVesselData
+                {
+                    MMSI = "123456789",
+                    Name = "Hudson Trader",
+                    VesselType = "Cargo",
+                    Latitude = 42.0, // North of Kingston
+                    Longitude = -73.95,
+                    SOG = 10.5, // knots
+                    COG = 180.0, // Southbound
+                    Timestamp = DateTime.UtcNow
+                },
+                new AISVesselData
+                {
+                    MMSI = "987654321",
+                    Name = "River Freighter",
+                    VesselType = "Freighter",
+                    Latitude = 41.95,
+                    Longitude = -73.97,
+                    SOG = 8.2,
+                    COG = 200.0,
+                    Timestamp = DateTime.UtcNow
+                },
+                // Add more mock vessels as needed for testing
+            };
+
+            // Log the mock data as JSON for debugging
+            var json = System.Text.Json.JsonSerializer.Serialize(mockVessels);
+            Console.WriteLine("Mock AIS data: " + json);
+
+            return Task.FromResult(mockVessels);
         }
 
         // Utility: Calculate distance (nautical miles) between two points (Haversine formula)
