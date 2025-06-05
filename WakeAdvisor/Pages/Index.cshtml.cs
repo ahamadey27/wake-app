@@ -6,29 +6,40 @@ namespace WakeAdvisor.Pages;
 
 public class IndexModel : PageModel
 {
-    private readonly ILogger<IndexModel> _logger;
     private readonly TideService _tideService;
-
-    public IndexModel(ILogger<IndexModel> logger, TideService tideService)
-    {
-        _logger = logger;
-        _tideService = tideService;
-    }
-
-    [BindProperty]
-    public DateTime SelectedDate { get; set; }
+    private readonly FreighterService _freighterService;
 
     public List<LowTideWindow>? LowTideWindows { get; set; }
+    public List<FreighterInfo>? FreighterInfos { get; set; }
+    public string SelectedDay { get; set; } = "today";
 
-    public void OnGet()
+    public IndexModel(TideService tideService, FreighterService freighterService)
     {
-
+        _tideService = tideService;
+        _freighterService = freighterService;
+        LowTideWindows = new List<LowTideWindow>();
+        FreighterInfos = new List<FreighterInfo>();
     }
 
-    public async Task<IActionResult> OnPostAsync()
+    public async Task OnGetAsync()
     {
-        // Call the TideService to get low tide windows for the selected date
-        LowTideWindows = await _tideService.GetLowTideWindowsAsync(SelectedDate);
-        return Page();
+        await LoadDataAsync("today");
+    }
+
+    public async Task OnPostAsync()
+    {
+        SelectedDay = Request.Form["SelectedDay"].ToString() ?? "today";
+        await LoadDataAsync(SelectedDay);
+    }
+
+    private async Task LoadDataAsync(string selectedDay)
+    {
+        DateTime date = DateTime.Now.Date;
+        if (selectedDay == "tomorrow")
+        {
+            date = date.AddDays(1);
+        }
+        LowTideWindows = await _tideService.GetLowTideWindowsAsync(date);
+        FreighterInfos = await _freighterService.GetSouthboundFreighterInfoAsync(date);
     }
 }

@@ -21,11 +21,12 @@ namespace WakeAdvisor.Services
         // Retrieves low tide windows for the specified date
         public async Task<List<LowTideWindow>> GetLowTideWindowsAsync(DateTime date)
         {
-            // Always use today's date for tide predictions
+            // Only allow tide predictions for today or tomorrow
             var today = DateTime.Now.Date;
-            if (date.Date != today)
+            var tomorrow = today.AddDays(1);
+            if (date.Date != today && date.Date != tomorrow)
             {
-                // If a non-today date is passed, return an empty list
+                // If a non-today/tomorrow date is passed, return an empty list
                 return new List<LowTideWindow>();
             }
             // Build the NOAA API request URL for today's date and station
@@ -73,7 +74,7 @@ namespace WakeAdvisor.Services
                         }
                         else
                         {
-                            // For future dates, add all low tide windows
+                            // For tomorrow's date, add all low tide windows
                             lowTideWindows.Add(new LowTideWindow
                             {
                                 Time = prediction.Time,

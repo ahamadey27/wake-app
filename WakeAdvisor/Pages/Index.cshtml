@@ -6,32 +6,63 @@
 
 <div class="text-center">
     <h1 class="display-4">Hudson River Southbound Freighter Wake Advisor</h1>
+    <p>Select a date to view low tide windows and freighter predictions for wake surfing near Kingston, NY.</p>
+
     <form method="post">
-        <!-- Date input for user to select the target date (restricted to today) -->
-        <label for="dateInput">Today's Date:</label>
-        <input type="date" id="dateInput" name="SelectedDate" value="@DateTime.Now.ToString("yyyy-MM-dd")" readonly />
-        <!-- Button to submit the form and trigger the check -->
-        <button type="submit">Check Conditions</button>
+        <div class="form-group">
+            <label>Select Date:</label><br />
+            <input type="radio" id="today" name="SelectedDay" value="today" checked />
+            <label for="today">Today (@DateTime.Now.ToString("MMMM dd, yyyy"))</label><br />
+            <input type="radio" id="tomorrow" name="SelectedDay" value="tomorrow" />
+            <label for="tomorrow">Tomorrow (@DateTime.Now.AddDays(1).ToString("MMMM dd, yyyy"))</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Get Predictions</button>
     </form>
-    <p style="color: #888; font-size: 0.95em;">
-        Note: Tide predictions are only available for today. Future date predictions are not supported.
-    </p>
-    <!-- Area to display results (tide status, freighter info) -->
-    <div id="resultsArea" style="margin-top: 2em;">
-        @if (Model.LowTideWindows != null && Model.LowTideWindows.Any())
-        {
-            <h3>Low Tide Windows (≤ 2 ft):</h3>
-            <ul>
-                @foreach (var window in Model.LowTideWindows)
-                {
-                    <li>@window.Time - @window.Height ft</li>
-                }
-            </ul>
-        }
-        else if (Model.LowTideWindows != null)
-        {
-            <p>No tide predictions available for this date. Please select a date within the next week.</p>
-        }
-    </div>
-    <!-- Remove the About section from the main page -->
+
+    @if (Model.LowTideWindows != null && Model.LowTideWindows.Count > 0)
+    {
+        <h2>Low Tide Windows (≤ 2 ft):</h2>
+        <ul>
+            @foreach (var window in Model.LowTideWindows)
+            {
+                <li>@window.Time (Height: @window.Height ft)</li>
+            }
+        </ul>
+    }
+    else if (Model.LowTideWindows != null)
+    {
+        <p>No low tide windows found for the selected date.</p>
+    }
+
+    @if (Model.FreighterInfos != null && Model.FreighterInfos.Count > 0)
+    {
+        <h2>Southbound Freighters Approaching Kingston</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>MMSI</th>
+                    <th>Speed (knots)</th>
+                    <th>Distance (NM)</th>
+                    <th>ETA at Kingston</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var info in Model.FreighterInfos)
+            {
+                <tr>
+                    <td>@info.Name</td>
+                    <td>@info.MMSI</td>
+                    <td>@info.CurrentSOG</td>
+                    <td>@info.DistanceToKingstonNM.ToString("F2")</td>
+                    <td>@info.ETAAtKingston.ToString("g")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    else if (Model.FreighterInfos != null)
+    {
+        <p>No southbound freighters predicted for the selected date and time window.</p>
+    }
 </div>

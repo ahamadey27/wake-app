@@ -50,6 +50,15 @@ namespace WakeAdvisor.Services
         // Main entry point: gets southbound freighters and their ETAs
         public async Task<List<FreighterInfo>> GetSouthboundFreighterInfoAsync(DateTime selectedDate)
         {
+            // Only allow live AIS tracking for today or tomorrow
+            var today = DateTime.Now.Date;
+            var tomorrow = today.AddDays(1);
+            if (selectedDate.Date != today && selectedDate.Date != tomorrow)
+            {
+                // For future dates, return an empty list (or handle as needed)
+                return new List<FreighterInfo>();
+            }
+
             // TODO: Call AIS API and retrieve vessel data for the Kingston area
             List<AISVesselData> vessels = await GetAISVesselsAsync(selectedDate);
             // Filter vessels by type (freighter/cargo), position, direction, and ETA window
