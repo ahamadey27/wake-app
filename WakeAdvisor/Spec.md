@@ -86,8 +86,8 @@
 - [x] **Step 1.4: Integrate Tide Service with Backend Logic**
     - [x] Invoke `TideService` from Controller/PageModel on page load or user submission.
     - [x] Pass processed tide info to UI.
-- [ ] **Step 1.5: Configuration Management**
-    - [ ] Store API endpoints, etc., using `appsettings.json` or environment variables.
+- [x] **Step 1.5: Configuration Management**
+    - [x] Store API endpoints, etc., using `appsettings.json` or environment variables.
 - [x] **Step 1.6: Add About Page**
     - [x] Create an About page describing the project purpose and technology stack.
 

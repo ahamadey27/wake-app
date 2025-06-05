@@ -11,7 +11,7 @@ namespace WakeAdvisor.Services
     public class TideService
     {
         private readonly HttpClient _httpClient;
-        private const string StationId = "8518901"; // Kingston Point, Hudson River, NY
+        private const string StationId = "8518962"; // Turkey Point, NY
 
         public TideService(HttpClient httpClient)
         {
