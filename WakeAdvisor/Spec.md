@@ -122,12 +122,12 @@
     - [x] Estimate time to arrival (Distance / SOG).
     - [x] Calculate ETA (Current Time + Time to Arrival).
     - [x] Consider using API-provided ETA if available.
-- [ ] **Step 3.4: Handle Date-Specific Logic (Near-Term vs. Far-Future)**
-    - [ ] For "Today"/"Tomorrow": Execute live AIS calls and logic.
-    - [ ] For Future Dates: Return message (no live tracking).
-- [ ] **Step 3.5: Integrate Filtered Freighter Data with UI**
-    - [ ] Call `FreighterService` after tide check.
-    - [ ] Combine and format tide and freighter data for UI display.
+- [x] **Step 3.4: Handle Date-Specific Logic (Near-Term vs. Far-Future)**
+    - [x] For "Today"/"Tomorrow": Execute live AIS calls and logic.
+    - [x] For Future Dates: Return message (no live tracking).
+- [x] **Step 3.5: Integrate Filtered Freighter Data with UI**
+    - [x] Call `FreighterService` after tide check.
+    - [x] Combine and format tide and freighter data for UI display.
 
 ## Phase 4: UI/UX Enhancements & Application Robustness
 - [ ] **Step 4.1: Refine Results Display**
