@@ -3,6 +3,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient<WakeAdvisor.Services.TideService>();
+builder.Services.AddSingleton<WakeAdvisor.Services.FreighterService>();
 
 var app = builder.Build();
 
