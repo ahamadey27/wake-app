@@ -19,21 +19,6 @@
         <button type="submit" class="btn btn-primary">Get Predictions</button>
     </form>
 
-    @if (Model.LowTideWindows != null && Model.LowTideWindows.Count > 0)
-    {
-        <h2>Low Tide Windows (≤ 2 ft):</h2>
-        <ul>
-            @foreach (var window in Model.LowTideWindows)
-            {
-                <li>@window.Time (Height: @window.Height ft)</li>
-            }
-        </ul>
-    }
-    else if (Model.LowTideWindows != null && Model.LowTideWindows.Count == 0 && ViewContext.HttpContext.Request.Method == "POST" && Model.FreighterInfos != null && Model.FreighterInfos.Count == 0)
-    {
-        <p>No low tide windows found for the selected date.</p>
-    }
-
     @if (Model.FreighterInfos != null && Model.FreighterInfos.Count > 0)
     {
         <h2>Southbound Freighters Approaching Kingston</h2>
@@ -59,16 +44,24 @@
                     <td>
                         @{
                             double? projectedTide = null;
-                            if (Model.AllTidePredictions != null && info.ETAAtKingston != null)
+                            if (Model.AllTidePredictions != null)
                             {
-                                var formats = new[] { "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss" };
+                                var formats = new[] {
+                                    "yyyy-MM-dd HH:mm",
+                                    "yyyy-MM-dd HH:mm:ss",
+                                    "yyyy-MM-dd'T'HH:mm",
+                                    "yyyy-MM-dd'T'HH:mm:ss",
+                                    "yyyy-MM-dd HH:mm zzz",
+                                    "yyyy-MM-dd'T'HH:mmK",
+                                    "yyyy-MM-dd'T'HH:mm:ssK"
+                                };
                                 var closest = Model.AllTidePredictions
                                     .Select(tp => new {
                                         Prediction = tp,
                                         Time = DateTime.TryParseExact(tp.Time, formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : (DateTime?)null
                                     })
-                                    .Where(x => x.Time != null)
-                                    .OrderBy(x => Math.Abs(((DateTime)x.Time - info.ETAAtKingston).TotalMinutes))
+                                    .Where(x => x.Time.HasValue)
+                                    .OrderBy(x => Math.Abs((x.Time.Value - info.ETAAtKingston).TotalMinutes))
                                     .FirstOrDefault();
                                 if (closest != null && double.TryParse(closest.Prediction.Value, out var tideVal))
                                 {

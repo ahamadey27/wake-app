@@ -138,7 +138,9 @@ namespace WakeAdvisor.Services
     // Model for each tide prediction entry
     public class TidePrediction
     {
+        [JsonPropertyName("t")]
         public string? Time { get; set; }
+        [JsonPropertyName("v")]
         public string? Value { get; set; }
     }
 
