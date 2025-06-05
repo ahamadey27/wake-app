@@ -11,9 +11,9 @@
     <form method="post">
         <div class="form-group">
             <label>Select Date:</label><br />
-            <input type="radio" id="today" name="SelectedDay" value="today" checked />
+            <input type="radio" id="today" name="SelectedDay" value="today" @(Model.SelectedDay == "today" ? "checked" : "") />
             <label for="today">Today (@DateTime.Now.ToString("MMMM dd, yyyy"))</label><br />
-            <input type="radio" id="tomorrow" name="SelectedDay" value="tomorrow" />
+            <input type="radio" id="tomorrow" name="SelectedDay" value="tomorrow" @(Model.SelectedDay == "tomorrow" ? "checked" : "") />
             <label for="tomorrow">Tomorrow (@DateTime.Now.AddDays(1).ToString("MMMM dd, yyyy"))</label>
         </div>
         <button type="submit" class="btn btn-primary">Get Predictions</button>
@@ -29,7 +29,7 @@
             }
         </ul>
     }
-    else if (Model.LowTideWindows != null)
+    else if (Model.LowTideWindows != null && Model.LowTideWindows.Count == 0 && ViewContext.HttpContext.Request.Method == "POST" && Model.FreighterInfos != null && Model.FreighterInfos.Count == 0)
     {
         <p>No low tide windows found for the selected date.</p>
     }

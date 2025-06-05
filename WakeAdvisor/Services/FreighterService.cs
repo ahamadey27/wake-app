@@ -111,33 +111,67 @@ namespace WakeAdvisor.Services
         // Stub for AIS API call (to be implemented)
         private Task<List<AISVesselData>> GetAISVesselsAsync(DateTime date)
         {
-            // Mock data: a few sample vessels near Kingston, NY
-            var mockVessels = new List<AISVesselData>
+            // Adjust mock data to provide different vessels for today and tomorrow
+            var today = DateTime.Now.Date;
+            var tomorrow = today.AddDays(1);
+            var mockVessels = new List<AISVesselData>();
+
+            if (date.Date == today)
             {
-                new AISVesselData
+                mockVessels.AddRange(new[]
                 {
-                    MMSI = "123456789",
-                    Name = "Hudson Trader",
-                    VesselType = "Cargo",
-                    Latitude = 42.0, // North of Kingston
-                    Longitude = -73.95,
-                    SOG = 10.5, // knots
-                    COG = 180.0, // Southbound
-                    Timestamp = DateTime.UtcNow
-                },
-                new AISVesselData
+                    new AISVesselData
+                    {
+                        MMSI = "123456789",
+                        Name = "Hudson Trader",
+                        VesselType = "Cargo",
+                        Latitude = 42.0, // North of Kingston
+                        Longitude = -73.95,
+                        SOG = 10.5,
+                        COG = 180.0,
+                        Timestamp = DateTime.UtcNow
+                    },
+                    new AISVesselData
+                    {
+                        MMSI = "987654321",
+                        Name = "River Freighter",
+                        VesselType = "Freighter",
+                        Latitude = 41.95,
+                        Longitude = -73.97,
+                        SOG = 8.2,
+                        COG = 200.0,
+                        Timestamp = DateTime.UtcNow
+                    }
+                });
+            }
+            else if (date.Date == tomorrow)
+            {
+                mockVessels.AddRange(new[]
                 {
-                    MMSI = "987654321",
-                    Name = "River Freighter",
-                    VesselType = "Freighter",
-                    Latitude = 41.95,
-                    Longitude = -73.97,
-                    SOG = 8.2,
-                    COG = 200.0,
-                    Timestamp = DateTime.UtcNow
-                },
-                // Add more mock vessels as needed for testing
-            };
+                    new AISVesselData
+                    {
+                        MMSI = "555555555",
+                        Name = "Tomorrow Mariner",
+                        VesselType = "Cargo",
+                        Latitude = 42.05,
+                        Longitude = -73.92,
+                        SOG = 9.0,
+                        COG = 190.0,
+                        Timestamp = DateTime.UtcNow.AddDays(1)
+                    },
+                    new AISVesselData
+                    {
+                        MMSI = "666666666",
+                        Name = "Future Freighter",
+                        VesselType = "Freighter",
+                        Latitude = 41.98,
+                        Longitude = -73.99,
+                        SOG = 7.5,
+                        COG = 210.0,
+                        Timestamp = DateTime.UtcNow.AddDays(1)
+                    }
+                });
+            }
 
             // Log the mock data as JSON for debugging
             var json = System.Text.Json.JsonSerializer.Serialize(mockVessels);
