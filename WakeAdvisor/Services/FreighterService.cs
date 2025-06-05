@@ -52,16 +52,50 @@ namespace WakeAdvisor.Services
         {
             // TODO: Call AIS API and retrieve vessel data for the Kingston area
             List<AISVesselData> vessels = await GetAISVesselsAsync(selectedDate);
+            // Filter vessels by type (freighter/cargo), position, direction, and ETA window
+            var filtered = new List<FreighterInfo>();
+            foreach (var vessel in vessels)
+            {
+                // Only consider freighter/cargo types (adjust as needed for your AIS data)
+                if (string.IsNullOrEmpty(vessel.VesselType) ||
+                    !(vessel.VesselType.ToLower().Contains("freighter") || vessel.VesselType.ToLower().Contains("cargo")))
+                    continue;
 
-            // TODO: Filter vessels by type (freighter/cargo)
-            // TODO: Filter vessels north of Kingston and approaching
-            // TODO: Filter by COG within southbound range
-            // TODO: Filter out vessels already past Kingston
+                // Vessel must be north of Kingston Point
+                if (vessel.Latitude <= KingstonPoint.Latitude)
+                    continue;
 
-            // TODO: For each qualifying vessel, calculate distance to Kingston and ETA
-            // Use Haversine formula for distance, SOG for ETA
+                // Vessel must be heading southbound
+                if (vessel.COG < SouthboundMin || vessel.COG > SouthboundMax)
+                    continue;
 
-            // TODO: Return list of FreighterInfo objects
+                // Calculate distance to Kingston (nautical miles)
+                var vesselPoint = new GeoPoint { Latitude = vessel.Latitude, Longitude = vessel.Longitude };
+                double distanceNM = CalculateDistanceNM(vesselPoint, KingstonPoint);
+
+                // Avoid divide by zero and filter out stationary vessels
+                if (vessel.SOG <= 0.1)
+                    continue;
+
+                // Calculate ETA in minutes
+                double etaMinutes = (distanceNM / vessel.SOG) * 60.0;
+
+                // Only include vessels with ETA between 15 and 50 minutes
+                if (etaMinutes < 15 || etaMinutes > 50)
+                    continue;
+
+                // Add to results
+                filtered.Add(new FreighterInfo
+                {
+                    Name = vessel.Name,
+                    MMSI = vessel.MMSI,
+                    CurrentSOG = vessel.SOG,
+                    DistanceToKingstonNM = distanceNM,
+                    ETAAtKingston = vessel.Timestamp.AddMinutes(etaMinutes)
+                });
+            }
+            return filtered;
+
             return new List<FreighterInfo>();
         }
 
@@ -75,8 +109,24 @@ namespace WakeAdvisor.Services
         // Utility: Calculate distance (nautical miles) between two points (Haversine formula)
         public static double CalculateDistanceNM(GeoPoint a, GeoPoint b)
         {
-            // TODO: Implement Haversine formula
-            return 0.0;
+            // Radius of the Earth in nautical miles
+            const double R = 3440.065;
+
+            // Convert degrees to radians
+            double lat1 = a.Latitude * Math.PI / 180.0;
+            double lon1 = a.Longitude * Math.PI / 180.0;
+            double lat2 = b.Latitude * Math.PI / 180.0;
+            double lon2 = b.Longitude * Math.PI / 180.0;
+
+            // Haversine formula
+            double dLat = lat2 - lat1;
+            double dLon = lon2 - lon1;
+            double h = Math.Pow(Math.Sin(dLat / 2), 2) +
+                       Math.Cos(lat1) * Math.Cos(lat2) * Math.Pow(Math.Sin(dLon / 2), 2);
+            double c = 2 * Math.Asin(Math.Sqrt(h));
+            double distance = R * c;
+
+            return distance;
         }
     }
 }

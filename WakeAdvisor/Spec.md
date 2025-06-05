@@ -92,35 +92,35 @@
     - [x] Create an About page describing the project purpose and technology stack.
 
 ## Phase 2: Freighter Data - AIS Provider Research & Initial API Setup
-- [ ] **Step 2.1: Research and Select AIS Data Provider**
+- [x] **Step 2.1: Research and Select AIS Data Provider**
     - [ ] Evaluate providers (MarineTraffic, VesselFinder, AISHub, Spire Maritime, etc.).
     - [ ] Criteria: API capabilities (vessel type, location, COG, SOG, ETA), coverage, reliability, pricing, documentation.
     - [ ] Choose a provider.
 - [ ] **Step 2.2: Obtain API Credentials & Setup Account**
     - [ ] Register and get API key/token.
-- [ ] **Step 2.3: Develop Initial FreighterService.cs Structure**
-    - [ ] Create `FreighterService.cs`.
-    - [ ] Define initial method stubs (e.g., `async Task<FreighterData> GetSouthboundFreighterInfoAsync(...)`).
+- [x] **Step 2.3: Develop Initial FreighterService.cs Structure**
+    - [x] Create `FreighterService.cs`.
+    - [x] Define initial method stubs (e.g., `async Task<FreighterData> GetSouthboundFreighterInfoAsync(...)`).
 - [ ] **Step 2.4: Implement Basic AIS API Call**
     - [ ] Implement test API call within `FreighterService.cs`.
     - [ ] Authenticate and request data for Kingston, NY area.
     - [ ] Log raw JSON response.
-- [ ] **Step 2.5: Model AIS Data Structures**
-    - [ ] Define C# classes for AIS API JSON response.
+- [x] **Step 2.5: Model AIS Data Structures**
+    - [x] Define C# classes for AIS API JSON response.
 
 ## Phase 3: Core Freighter Logic - Southbound Filtering & ETA Calculation
-- [ ] **Step 3.1: Define "Kingston Approach Zone" and "Southbound" Bearings**
-    - [ ] Establish precise lat/lon for "Kingston Point".
-    - [ ] Determine and document southbound bearing range (e.g., 160°-220° True).
-- [ ] **Step 3.2: Implement Advanced Freighter Filtering in FreighterService.cs**
-    - [ ] Filter by Vessel Type (freighters/cargo).
-    - [ ] Filter by Proximity & Potential Path (north of Kingston, approaching).
-    - [ ] Filter by Direction (COG/HDG within southbound range).
-    - [ ] Filter out Vessels Already Passed Kingston.
-- [ ] **Step 3.3: Implement Estimated Time of Arrival (ETA) Calculation**
-    - [ ] Calculate distance to Kingston Point (Haversine formula).
-    - [ ] Estimate time to arrival (Distance / SOG).
-    - [ ] Calculate ETA (Current Time + Time to Arrival).
+- [x] **Step 3.1: Define "Kingston Approach Zone" and "Southbound" Bearings**
+    - [x] Establish precise lat/lon for "Kingston Point".
+    - [x] Determine and document southbound bearing range (e.g., 160°-220° True).
+- [x] **Step 3.2: Implement Advanced Freighter Filtering in FreighterService.cs**
+    - [x] Filter by Vessel Type (freighters/cargo).
+    - [x] Filter by Proximity & Potential Path (north of Kingston, approaching).
+    - [x] Filter by Direction (COG/HDG within southbound range).
+    - [x] Filter out Vessels Already Passed Kingston.
+- [x] **Step 3.3: Implement Estimated Time of Arrival (ETA) Calculation**
+    - [x] Calculate distance to Kingston Point (Haversine formula).
+    - [x] Estimate time to arrival (Distance / SOG).
+    - [x] Calculate ETA (Current Time + Time to Arrival).
     - [ ] Consider using API-provided ETA if available.
 - [ ] **Step 3.4: Handle Date-Specific Logic (Near-Term vs. Far-Future)**
     - [ ] For "Today"/"Tomorrow": Execute live AIS calls and logic.
