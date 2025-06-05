@@ -61,10 +61,11 @@
                             double? projectedTide = null;
                             if (Model.AllTidePredictions != null && info.ETAAtKingston != null)
                             {
+                                var formats = new[] { "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss" };
                                 var closest = Model.AllTidePredictions
                                     .Select(tp => new {
                                         Prediction = tp,
-                                        Time = DateTime.TryParse(tp.Time, out var t) ? t : (DateTime?)null
+                                        Time = DateTime.TryParseExact(tp.Time, formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : (DateTime?)null
                                     })
                                     .Where(x => x.Time != null)
                                     .OrderBy(x => Math.Abs(((DateTime)x.Time - info.ETAAtKingston).TotalMinutes))
