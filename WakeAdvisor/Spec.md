@@ -121,7 +121,7 @@
     - [x] Calculate distance to Kingston Point (Haversine formula).
     - [x] Estimate time to arrival (Distance / SOG).
     - [x] Calculate ETA (Current Time + Time to Arrival).
-    - [ ] Consider using API-provided ETA if available.
+    - [x] Consider using API-provided ETA if available.
 - [ ] **Step 3.4: Handle Date-Specific Logic (Near-Term vs. Far-Future)**
     - [ ] For "Today"/"Tomorrow": Execute live AIS calls and logic.
     - [ ] For Future Dates: Return message (no live tracking).
