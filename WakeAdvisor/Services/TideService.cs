@@ -92,6 +92,40 @@ namespace WakeAdvisor.Services
                 return new List<LowTideWindow>();
             }
         }
+
+        // Retrieves all tide predictions for the specified date
+        public async Task<List<TidePrediction>> GetAllTidePredictionsAsync(DateTime date)
+        {
+            // Only allow tide predictions for today or tomorrow
+            var today = DateTime.Now.Date;
+            var tomorrow = today.AddDays(1);
+            if (date.Date != today && date.Date != tomorrow)
+            {
+                // If a non-today/tomorrow date is passed, return an empty list
+                return new List<TidePrediction>();
+            }
+            // Build the NOAA API request URL for the specified date and station
+            string apiUrl = $"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=WakeAdvisor&begin_date={date:yyyyMMdd}&end_date={date:yyyyMMdd}&datum=MLLW&station={StationId}&time_zone=lst_ldt&units=english&interval=h&format=json";
+
+            try
+            {
+                // Make the HTTP GET request to the NOAA API
+                var response = await _httpClient.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+
+                // Parse the JSON response into C# objects
+                var json = await response.Content.ReadAsStringAsync();
+                var tideData = JsonSerializer.Deserialize<TidePredictionData>(json);
+
+                // Return the list of tide predictions, or an empty list if there are none
+                return tideData?.Predictions ?? new List<TidePrediction>();
+            }
+            catch (HttpRequestException)
+            {
+                // If the API request fails, return an empty list
+                return new List<TidePrediction>();
+            }
+        }
     }
 
     // Model for the NOAA API response

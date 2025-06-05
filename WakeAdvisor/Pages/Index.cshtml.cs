@@ -11,6 +11,7 @@ public class IndexModel : PageModel
 
     public List<LowTideWindow>? LowTideWindows { get; set; }
     public List<FreighterInfo>? FreighterInfos { get; set; }
+    public List<TidePrediction>? AllTidePredictions { get; set; }
     public string SelectedDay { get; set; } = "today";
 
     public IndexModel(TideService tideService, FreighterService freighterService)
@@ -19,6 +20,7 @@ public class IndexModel : PageModel
         _freighterService = freighterService;
         LowTideWindows = new List<LowTideWindow>();
         FreighterInfos = new List<FreighterInfo>();
+        AllTidePredictions = new List<TidePrediction>();
     }
 
     public async Task OnGetAsync()
@@ -41,5 +43,6 @@ public class IndexModel : PageModel
         }
         LowTideWindows = await _tideService.GetLowTideWindowsAsync(date);
         FreighterInfos = await _freighterService.GetSouthboundFreighterInfoAsync(date);
+        AllTidePredictions = await _tideService.GetAllTidePredictionsAsync(date);
     }
 }

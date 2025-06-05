@@ -44,6 +44,7 @@
                     <th>MMSI</th>
                     <th>Speed (knots)</th>
                     <th>Distance (NM)</th>
+                    <th>Projected Tide (ft)</th>
                     <th>ETA at Kingston</th>
                 </tr>
             </thead>
@@ -55,6 +56,27 @@
                     <td>@info.MMSI</td>
                     <td>@info.CurrentSOG</td>
                     <td>@info.DistanceToKingstonNM.ToString("F2")</td>
+                    <td>
+                        @{
+                            double? projectedTide = null;
+                            if (Model.AllTidePredictions != null && info.ETAAtKingston != null)
+                            {
+                                var closest = Model.AllTidePredictions
+                                    .Select(tp => new {
+                                        Prediction = tp,
+                                        Time = DateTime.TryParse(tp.Time, out var t) ? t : (DateTime?)null
+                                    })
+                                    .Where(x => x.Time != null)
+                                    .OrderBy(x => Math.Abs(((DateTime)x.Time - info.ETAAtKingston).TotalMinutes))
+                                    .FirstOrDefault();
+                                if (closest != null && double.TryParse(closest.Prediction.Value, out var tideVal))
+                                {
+                                    projectedTide = tideVal;
+                                }
+                            }
+                        }
+                        @(projectedTide.HasValue ? projectedTide.Value.ToString("F2") : "N/A")
+                    </td>
                     <td>@info.ETAAtKingston.ToString("g")</td>
                 </tr>
             }
