@@ -5,15 +5,94 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging; // Added for logging
 using System.IO;
 using System.Text.Json.Serialization; // Ensure this is present for JsonIgnoreCondition
 using System.Threading; // Added for CancellationToken
 using System.Threading.Tasks; // Added for Task
 using System.Diagnostics; // For Stopwatch
+using System.Globalization; // Added for CultureInfo and DateTimeStyles
+using Microsoft.Extensions.Logging; // Required for ILogger in CustomDateTimeConverter
 
 namespace WakeAdvisor.Services
 {
+    // Custom DateTime converter for AIS Stream API's specific format
+    public class CustomDateTimeConverter : JsonConverter<DateTime>
+    {
+        // Example format from logs: "2025-06-08 19:41:54.183554458 +0000 UTC"
+        private const string DateTimeFormatSevenFractional = "yyyy-MM-dd HH:mm:ss.fffffff K";
+        private const string DateTimeFormatSixFractional = "yyyy-MM-dd HH:mm:ss.ffffff K";
+        private const string DateTimeFormatFiveFractional = "yyyy-MM-dd HH:mm:ss.fffff K";
+        private const string DateTimeFormatFourFractional = "yyyy-MM-dd HH:mm:ss.ffff K";
+        private const string DateTimeFormatThreeFractional = "yyyy-MM-dd HH:mm:ss.fff K";
+        private const string DateTimeFormatNoFractional = "yyyy-MM-dd HH:mm:ss K";
+
+        private static ILogger? _logger;
+
+        public static void InitializeLogger(ILogger logger)
+        {
+            _logger = logger;
+        }
+
+        public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                string? dateString = reader.GetString();
+                if (string.IsNullOrEmpty(dateString))
+                {
+                    _logger?.LogWarning("DateTime string is null or empty.");
+                    return default;
+                }
+
+                // Normalize the date string by removing " UTC" suffix if present, as 'K' specifier handles UTC offset.
+                string normalizedDateString = dateString.EndsWith(" UTC") ? dateString.Substring(0, dateString.Length - 4).TrimEnd() : dateString.TrimEnd();
+                
+                string[] formats = { 
+                    DateTimeFormatSevenFractional, 
+                    DateTimeFormatSixFractional,
+                    DateTimeFormatFiveFractional,
+                    DateTimeFormatFourFractional,
+                    DateTimeFormatThreeFractional, 
+                    DateTimeFormatNoFractional,
+                    // Fallbacks with 'Z' instead of 'K' if the offset part is tricky
+                    "yyyy-MM-dd HH:mm:ss.fffffff'Z'",
+                    "yyyy-MM-dd HH:mm:ss.ffffff'Z'",
+                    "yyyy-MM-dd HH:mm:ss.fffff'Z'",
+                    "yyyy-MM-dd HH:mm:ss.ffff'Z'",
+                    "yyyy-MM-dd HH:mm:ss.fff'Z'",
+                    "yyyy-MM-dd HH:mm:ss'Z'"
+                };
+
+                foreach (var format in formats)
+                {
+                    if (DateTime.TryParseExact(normalizedDateString, format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces, out DateTime result))
+                    {
+                        _logger?.LogDebug("Successfully parsed DateTime string '{DateString}' (normalized to '{NormalizedDateString}') using format '{Format}'", dateString, normalizedDateString, format);
+                        return result;
+                    }
+                }
+                
+                // Try with DateTimeOffset to see if it can parse it, then convert to DateTime
+                if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces, out DateTimeOffset dtoResult))
+                {
+                    _logger?.LogDebug("Successfully parsed DateTime string '{DateString}' using DateTimeOffset.TryParse, then converted to UTC DateTime.", dateString);
+                    return dtoResult.UtcDateTime;
+                }
+
+                _logger?.LogError("Unable to convert \"{OriginalDateString}\" (normalized to \"{NormalizedDateString}\") to DateTime. None of the expected formats or DateTimeOffset.TryParse worked.", dateString, normalizedDateString);
+                throw new JsonException($"Unable to convert \"{dateString}\" to DateTime. None of the expected formats matched.");
+            }
+            _logger?.LogWarning("Encountered a non-string token for DateTime deserialization: {TokenType}", reader.TokenType);
+            return JsonSerializer.Deserialize<DateTime>(ref reader, options); // Should not happen for this API
+        }
+
+        public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+        {
+            // Use a standard UTC format, 'O' (round-trip) is good.
+            writer.WriteStringValue(value.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture));
+        }
+    }
+
     // Represents a geographic point (latitude, longitude)
     public class GeoPoint
     {
@@ -76,11 +155,22 @@ namespace WakeAdvisor.Services
         [JsonPropertyName("ShipName")]
         public string? ShipName { get; set; }
 
-        [JsonPropertyName("MMSI")] 
-        public long? Mmsi { get; set; } // Changed from string? to long?
+        [JsonPropertyName("MMSI")]
+        public long? Mmsi { get; set; }
 
         [JsonPropertyName("time_utc")]
-        public DateTime TimeUtc {get; set;} // Timestamp of when the message was received by the AISStream server
+        [JsonConverter(typeof(CustomDateTimeConverter))] // Apply the custom converter
+        public DateTime TimeUtc { get; set; } // Timestamp of when the message was received by the AISStream server
+
+        // Adding other fields observed in logs to prevent deserialization issues if they appear
+        [JsonPropertyName("MMSI_String")]
+        public string? MmsiString { get; set; }
+
+        [JsonPropertyName("latitude")]
+        public double? Latitude { get; set; }
+
+        [JsonPropertyName("longitude")]
+        public double? Longitude { get; set; }
     }
 
     // Specific DTO for the content of Message.PositionReport
@@ -114,8 +204,6 @@ namespace WakeAdvisor.Services
 
     public class FreighterService
     {
-        // HttpClient might not be strictly needed if all AIS comms are via WebSocket
-        // private readonly HttpClient _httpClient; 
         private readonly IConfiguration _configuration;
         private readonly ILogger<FreighterService> _logger;
 
@@ -132,9 +220,9 @@ namespace WakeAdvisor.Services
 
         public FreighterService(IConfiguration configuration, ILogger<FreighterService> logger)
         {
-            // _httpClient = httpClient;
             _configuration = configuration;
             _logger = logger;
+            CustomDateTimeConverter.InitializeLogger(logger); // Initialize logger for the custom converter
         }
 
         // Main entry point: gets southbound freighters and their ETAs
@@ -362,7 +450,7 @@ namespace WakeAdvisor.Services
                             else
                             {
                                 _logger.LogInformation("Received AIS message of type: {MessageType}. MetaData MMSI: {MetaMmsi}, MetaData ShipName: {MetaShipName}. Raw content: {MessageJson}", 
-                                    envelope.MessageType, envelope.MetaData?.Mmsi ?? "N/A", envelope.MetaData?.ShipName ?? "N/A", messageJson);
+                                    envelope.MessageType, envelope.MetaData?.Mmsi.ToString() ?? "N/A", envelope.MetaData?.ShipName ?? "N/A", messageJson);
                             }
                         }
                         catch (JsonException jsonEx)
