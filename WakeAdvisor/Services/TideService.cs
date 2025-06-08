@@ -85,7 +85,7 @@ namespace WakeAdvisor.Services
                 }
                 return lowTideWindows;
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException)
             {
                 // If the API returns a 400 Bad Request or other error, handle it gracefully
                 // Log the error if needed and return an empty list

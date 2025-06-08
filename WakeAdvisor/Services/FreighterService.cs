@@ -19,9 +19,9 @@ namespace WakeAdvisor.Services
     // Represents raw vessel data from the AIS API
     public class AISVesselData
     {
-        public string MMSI { get; set; } // Maritime Mobile Service Identity
-        public string Name { get; set; }
-        public string VesselType { get; set; }
+        public string? MMSI { get; set; } // Maritime Mobile Service Identity
+        public string? Name { get; set; }
+        public string? VesselType { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public double SOG { get; set; } // Speed Over Ground (knots)
@@ -32,8 +32,8 @@ namespace WakeAdvisor.Services
     // Represents a filtered southbound freighter and its ETA
     public class FreighterInfo
     {
-        public string Name { get; set; }
-        public string MMSI { get; set; }
+        public string? Name { get; set; }
+        public string? MMSI { get; set; }
         public double CurrentSOG { get; set; }
         public DateTime ETAAtKingston { get; set; }
         public double DistanceToKingstonNM { get; set; } // Nautical miles
@@ -154,8 +154,6 @@ namespace WakeAdvisor.Services
                 });
             }
             return filtered;
-
-            return new List<FreighterInfo>();
         }
 
         // Helper method to map AIS numeric ship type to a textual description
@@ -219,7 +217,7 @@ namespace WakeAdvisor.Services
                             vessels.Add(new AISVesselData
                             {
                                 MMSI = aisMessage.Mmsi.ToString(),
-                                Name = aisMessage.Name, // Can be null if not provided in the message
+                                Name = aisMessage.Name, // Can be null if not provided in the message (CS8601 addressed by making AISVesselData.Name nullable)
                                 // Use mapped ship type. The filter in GetSouthboundFreighterInfoAsync expects "freighter" or "cargo".
                                 VesselType = MapShipTypeNumericToText(aisMessage.ShipTypeNumeric),
                                 Latitude = aisMessage.Latitude,
