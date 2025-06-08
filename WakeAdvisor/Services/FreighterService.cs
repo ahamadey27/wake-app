@@ -19,12 +19,13 @@ namespace WakeAdvisor.Services
     public class CustomDateTimeConverter : JsonConverter<DateTime>
     {
         // Example format from logs: "2025-06-08 19:41:54.183554458 +0000 UTC"
-        private const string DateTimeFormatSevenFractional = "yyyy-MM-dd HH:mm:ss.fffffff K";
-        private const string DateTimeFormatSixFractional = "yyyy-MM-dd HH:mm:ss.ffffff K";
-        private const string DateTimeFormatFiveFractional = "yyyy-MM-dd HH:mm:ss.fffff K";
-        private const string DateTimeFormatFourFractional = "yyyy-MM-dd HH:mm:ss.ffff K";
-        private const string DateTimeFormatThreeFractional = "yyyy-MM-dd HH:mm:ss.fff K";
-        private const string DateTimeFormatNoFractional = "yyyy-MM-dd HH:mm:ss K";
+        // Constants for formats are illustrative; the array below is used.
+        // private const string DateTimeFormatSevenFractional = "yyyy-MM-dd HH:mm:ss.fffffff K";
+        // private const string DateTimeFormatSixFractional = "yyyy-MM-dd HH:mm:ss.ffffff K";
+        // private const string DateTimeFormatFiveFractional = "yyyy-MM-dd HH:mm:ss.fffff K";
+        // private const string DateTimeFormatFourFractional = "yyyy-MM-dd HH:mm:ss.ffff K";
+        // private const string DateTimeFormatThreeFractional = "yyyy-MM-dd HH:mm:ss.fff K";
+        // private const string DateTimeFormatNoFractional = "yyyy-MM-dd HH:mm:ss K";
 
         private static ILogger? _logger;
 
@@ -44,46 +45,88 @@ namespace WakeAdvisor.Services
                     return default;
                 }
 
-                // Normalize the date string by removing " UTC" suffix if present, as 'K' specifier handles UTC offset.
-                string normalizedDateString = dateString.EndsWith(" UTC") ? dateString.Substring(0, dateString.Length - 4).TrimEnd() : dateString.TrimEnd();
+                string stringToParse = dateString.Trim();
+                // Remove " UTC" suffix if present
+                if (stringToParse.EndsWith(" UTC"))
+                {
+                    stringToParse = stringToParse.Substring(0, stringToParse.Length - 4).TrimEnd();
+                }
+
+                // Truncate fractional seconds to 7 digits if longer
+                int dotIndex = stringToParse.IndexOf('.');
+                if (dotIndex > 0 && dotIndex < stringToParse.Length - 1) // Ensure there's something after '.'
+                {
+                    int firstCharAfterFractional = stringToParse.Length;
+                    // Find the first non-digit character after the dot, or end of string
+                    for (int i = dotIndex + 1; i < stringToParse.Length; i++)
+                    {
+                        if (!char.IsDigit(stringToParse[i]))
+                        {
+                            firstCharAfterFractional = i;
+                            break;
+                        }
+                    }
+
+                    if (firstCharAfterFractional > dotIndex + 1) // We have some fractional digits
+                    {
+                        string fractionalDigits = stringToParse.Substring(dotIndex + 1, firstCharAfterFractional - (dotIndex + 1));
+                        if (fractionalDigits.Length > 7)
+                        {
+                            string truncatedFractionalDigits = fractionalDigits.Substring(0, 7);
+                            stringToParse = stringToParse.Substring(0, dotIndex + 1) + 
+                                              truncatedFractionalDigits + 
+                                              stringToParse.Substring(firstCharAfterFractional);
+                        }
+                    }
+                }
+                
+                _logger?.LogDebug("Original DateTime string: '{OriginalDateString}', Processed for parsing: '{ProcessedString}'", dateString, stringToParse);
                 
                 string[] formats = { 
-                    DateTimeFormatSevenFractional, 
-                    DateTimeFormatSixFractional,
-                    DateTimeFormatFiveFractional,
-                    DateTimeFormatFourFractional,
-                    DateTimeFormatThreeFractional, 
-                    DateTimeFormatNoFractional,
+                    "yyyy-MM-dd HH:mm:ss.fffffff K", 
+                    "yyyy-MM-dd HH:mm:ss.ffffff K",
+                    "yyyy-MM-dd HH:mm:ss.fffff K",
+                    "yyyy-MM-dd HH:mm:ss.ffff K",
+                    "yyyy-MM-dd HH:mm:ss.fff K",
+                    "yyyy-MM-dd HH:mm:ss.ff K",
+                    "yyyy-MM-dd HH:mm:ss.f K",
+                    "yyyy-MM-dd HH:mm:ss K",
                     // Fallbacks with 'Z' instead of 'K' if the offset part is tricky
                     "yyyy-MM-dd HH:mm:ss.fffffff'Z'",
                     "yyyy-MM-dd HH:mm:ss.ffffff'Z'",
                     "yyyy-MM-dd HH:mm:ss.fffff'Z'",
                     "yyyy-MM-dd HH:mm:ss.ffff'Z'",
                     "yyyy-MM-dd HH:mm:ss.fff'Z'",
+                    "yyyy-MM-dd HH:mm:ss.ff'Z'",
+                    "yyyy-MM-dd HH:mm:ss.f'Z'",
                     "yyyy-MM-dd HH:mm:ss'Z'"
                 };
 
                 foreach (var format in formats)
                 {
-                    if (DateTime.TryParseExact(normalizedDateString, format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces, out DateTime result))
+                    if (DateTime.TryParseExact(stringToParse, format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces, out DateTime result))
                     {
-                        _logger?.LogDebug("Successfully parsed DateTime string '{DateString}' (normalized to '{NormalizedDateString}') using format '{Format}'", dateString, normalizedDateString, format);
+                        _logger?.LogDebug("Successfully parsed DateTime string '{OriginalDateString}' (processed to '{ProcessedString}') using format '{Format}'", dateString, stringToParse, format);
                         return result;
                     }
                 }
                 
-                // Try with DateTimeOffset to see if it can parse it, then convert to DateTime
-                if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces, out DateTimeOffset dtoResult))
+                // Try with DateTimeOffset as a fallback, it's more flexible
+                if (DateTimeOffset.TryParse(stringToParse, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AllowWhiteSpaces, out DateTimeOffset dtoResult))
                 {
-                    _logger?.LogDebug("Successfully parsed DateTime string '{DateString}' using DateTimeOffset.TryParse, then converted to UTC DateTime.", dateString);
+                    _logger?.LogDebug("Successfully parsed DateTime string '{OriginalDateString}' (processed to '{ProcessedString}') using DateTimeOffset.TryParse, then converted to UTC DateTime.", dateString, stringToParse);
                     return dtoResult.UtcDateTime;
                 }
 
-                _logger?.LogError("Unable to convert \"{OriginalDateString}\" (normalized to \"{NormalizedDateString}\") to DateTime. None of the expected formats or DateTimeOffset.TryParse worked.", dateString, normalizedDateString);
-                throw new JsonException($"Unable to convert \"{dateString}\" to DateTime. None of the expected formats matched.");
+                _logger?.LogError("Unable to convert \"{OriginalDateString}\" (processed to \"{ProcessedString}\") to DateTime. None of the expected formats or DateTimeOffset.TryParse worked.", dateString, stringToParse);
+                throw new JsonException($"Unable to convert \"{dateString}\" (processed to \"{stringToParse}\") to DateTime. None of the expected formats matched.");
             }
             _logger?.LogWarning("Encountered a non-string token for DateTime deserialization: {TokenType}", reader.TokenType);
-            return JsonSerializer.Deserialize<DateTime>(ref reader, options); // Should not happen for this API
+            // Fallback for non-string tokens, though not expected for this API's DateTime fields
+            // For safety, returning default or rethrowing might be better than trying to deserialize.
+            // However, if JsonSerializer.Deserialize<DateTime> is called, it might use built-in logic.
+            // Given the context, this path is unlikely for the 'time_utc' field.
+            return default; // Or throw new JsonException($"Expected string for DateTime, got {reader.TokenType}");
         }
 
         public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
@@ -197,8 +240,8 @@ namespace WakeAdvisor.Services
         [JsonPropertyName("ShipType")] // AIS numeric ship type
         public int? ShipType { get; set; }
 
-        [JsonPropertyName("Timestamp")] // UTC timestamp of the AIS message generation
-        public DateTime Timestamp { get; set; }
+        [JsonPropertyName("Timestamp")] // UTC second of the AIS message generation (0-59 typically)
+        public int? Timestamp { get; set; } // Changed from DateTime to int?
     }
 
 
@@ -323,12 +366,23 @@ namespace WakeAdvisor.Services
             // Kingston Bounding Box: [[LAT_SOUTH, LON_WEST], [LAT_NORTH, LON_EAST]]
             // Approx. +/- 0.5 degrees from Kingston Point (41.9275 N, -73.9639 W)
             // Lat: 41.4275 to 42.4275, Lon: -74.4639 to -73.4639
+            // var boundingBoxes = new List<List<List<double>>>
+            // {
+            //     new List<List<double>>
+            //     {
+            //         new List<double> { 41.4275, -74.4639 }, // South-West corner
+            //         new List<double> { 42.4275, -73.4639 }  // North-East corner
+            //     }
+            // };
+
+            // Using AIS Stream documentation example bounding box for testing
+            _logger.LogInformation("Using AIS Stream example bounding box for testing: [[[30, -20], [70, 20]]]"); // Corrected: removed extra semicolon inside and outside string literal
             var boundingBoxes = new List<List<List<double>>>
             {
                 new List<List<double>>
                 {
-                    new List<double> { 41.4275, -74.4639 }, // South-West corner
-                    new List<double> { 42.4275, -73.4639 }  // North-East corner
+                    new List<double> { 30, -20 }, // South-West corner (Lat: 30, Lon: -20)
+                    new List<double> { 70, 20 }   // North-East corner (Lat: 70, Lon: 20)
                 }
             };
 
@@ -427,6 +481,24 @@ namespace WakeAdvisor.Services
                                         double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
                                         double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
 
+                                        DateTime finalTimestamp = envelope.MetaData?.TimeUtc ?? DateTime.UtcNow; // Default to MetaData.TimeUtc or current UTC time
+                                        if (positionReport.Timestamp.HasValue && positionReport.Timestamp.Value >= 0 && positionReport.Timestamp.Value <= 59)
+                                        {
+                                            // Adjust the seconds of the MetaData timestamp
+                                            finalTimestamp = new DateTime(finalTimestamp.Year, finalTimestamp.Month, finalTimestamp.Day, 
+                                                                      finalTimestamp.Hour, finalTimestamp.Minute, positionReport.Timestamp.Value, 
+                                                                      finalTimestamp.Kind == DateTimeKind.Unspecified ? DateTimeKind.Utc : finalTimestamp.Kind); // Preserve kind, default to Utc
+                                            // Preserve milliseconds from original MetaData.TimeUtc if desired, otherwise they become 0
+                                            finalTimestamp = finalTimestamp.AddMilliseconds(envelope.MetaData?.TimeUtc.Millisecond ?? 0);
+
+                                        }
+                                        else
+                                        {
+                                            _logger.LogWarning("PositionReport.Timestamp ({PositionReportTimestamp}) is not a valid second (0-59). Using MetaData.TimeUtc ({MetaDataTimeUtc}) as is for MMSI: {MMSI}.", 
+                                                positionReport.Timestamp, envelope.MetaData?.TimeUtc, positionReport.UserId);
+                                            // finalTimestamp is already set to MetaData.TimeUtc or UtcNow
+                                        }
+
                                         vessels.Add(new AISVesselData
                                         {
                                             MMSI = positionReport.UserId.ToString(),
@@ -435,11 +507,11 @@ namespace WakeAdvisor.Services
                                             Longitude = positionReport.Longitude,
                                             SOG = sogKnots,
                                             COG = cogDegrees,
-                                            Timestamp = positionReport.Timestamp, 
+                                            Timestamp = finalTimestamp, 
                                             VesselType = MapShipTypeNumericToText(positionReport.ShipType)
                                         });
-                                        _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}, Name: {Name}, Lat: {Lat}, Lon: {Lon}, SOG: {Sog}kn, COG: {Cog}deg, Type: {ShipTypeNum}, Timestamp: {Ts}", 
-                                            positionReport.UserId, envelope.MetaData?.ShipName ?? "N/A", positionReport.Latitude, positionReport.Longitude, sogKnots, cogDegrees, positionReport.ShipType, positionReport.Timestamp);
+                                        _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}, Name: {Name}, Lat: {Lat}, Lon: {Lon}, SOG: {Sog}kn, COG: {Cog}deg, Type: {ShipTypeNum}, TS: {TsValue} (sec), Final TS: {FinalTs}", 
+                                            positionReport.UserId, envelope.MetaData?.ShipName ?? "N/A", positionReport.Latitude, positionReport.Longitude, sogKnots, cogDegrees, positionReport.ShipType, positionReport.Timestamp, finalTimestamp);
                                     }
                                 }
                                 else
