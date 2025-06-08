@@ -95,16 +95,16 @@
 - [x] **Step 2.1: Research and Select AIS Data Provider**
     - [x] Evaluate providers (MarineTraffic, VesselFinder, AISHub, Spire Maritime, etc.).
     - [x] Criteria: API capabilities (vessel type, location, COG, SOG, ETA), coverage, reliability, pricing, documentation.
-    - [x] Choose a provider (Mock Data for now).
+    - [x] Choose a provider (AIS Stream).
 - [x] **Step 2.2: Obtain API Credentials & Setup Account**
-    - [x] Register and get API key/token (not required for mock data).
+    - [x] Register and get API key/token.
 - [x] **Step 2.3: Develop Initial FreighterService.cs Structure**
     - [x] Create `FreighterService.cs`.
     - [x] Define initial method stubs (e.g., `async Task<FreighterData> GetSouthboundFreighterInfoAsync(...)`).
 - [x] **Step 2.4: Implement Basic AIS API Call**
-    - [x] Implement test API call within `FreighterService.cs` (returns mock data).
-    - [x] Authenticate and request data for Kingston, NY area (not required for mock data).
-    - [x] Log raw JSON response (log mock data for debugging).
+    - [x] Implement API call within `FreighterService.cs` using AIS Stream.
+    - [x] Authenticate and request data for Kingston, NY area.
+    - [x] Log raw JSON response.
 - [x] **Step 2.5: Model AIS Data Structures**
     - [x] Define C# classes for AIS API JSON response.
 

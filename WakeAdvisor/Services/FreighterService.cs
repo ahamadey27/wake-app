@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace WakeAdvisor.Services
 {
@@ -36,6 +40,9 @@ namespace WakeAdvisor.Services
 
     public class FreighterService
     {
+        private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
+
         // Kingston Point reference coordinates
         private static readonly GeoPoint KingstonPoint = new GeoPoint
         {
@@ -46,6 +53,12 @@ namespace WakeAdvisor.Services
         // Southbound bearing range (degrees True)
         private const double SouthboundMin = 160.0;
         private const double SouthboundMax = 220.0;
+
+        public FreighterService(HttpClient httpClient, IConfiguration configuration)
+        {
+            _httpClient = httpClient;
+            _configuration = configuration;
+        }
 
         // Main entry point: gets southbound freighters and their ETAs
         public async Task<List<FreighterInfo>> GetSouthboundFreighterInfoAsync(DateTime selectedDate)
@@ -108,76 +121,45 @@ namespace WakeAdvisor.Services
             return new List<FreighterInfo>();
         }
 
-        // Stub for AIS API call (to be implemented)
-        private Task<List<AISVesselData>> GetAISVesselsAsync(DateTime date)
+        // Fetches AIS vessel data from the API
+        private async Task<List<AISVesselData>> GetAISVesselsAsync(DateTime selectedDate)
         {
-            // Adjust mock data to provide different vessels for today and tomorrow
-            var today = DateTime.Now.Date;
-            var tomorrow = today.AddDays(1);
-            var mockVessels = new List<AISVesselData>();
+            var apiKey = _configuration["AISStreamApiKey"];
+            // AISStream API endpoint for real-time data around a bounding box
+            // Bounding box for Kingston, NY area (adjust as needed)
+            // Format: BBOX = minLongitude,minLatitude,maxLongitude,maxLatitude
+            var boundingBox = "-74.05,41.90,-73.85,42.00"; // Example, adjust as needed
+            var requestUrl = $"https://stream.aisstream.io/v0/stream?bbox={boundingBox}";
 
-            if (date.Date == today)
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            
+            try
             {
-                mockVessels.AddRange(new[]
-                {
-                    new AISVesselData
-                    {
-                        MMSI = "123456789",
-                        Name = "Hudson Trader",
-                        VesselType = "Cargo",
-                        Latitude = 42.0, // North of Kingston
-                        Longitude = -73.95,
-                        SOG = 10.5,
-                        COG = 180.0,
-                        Timestamp = DateTime.UtcNow
-                    },
-                    new AISVesselData
-                    {
-                        MMSI = "987654321",
-                        Name = "River Freighter",
-                        VesselType = "Freighter",
-                        Latitude = 41.95,
-                        Longitude = -73.97,
-                        SOG = 8.2,
-                        COG = 200.0,
-                        Timestamp = DateTime.UtcNow
-                    }
-                });
+                var response = await _httpClient.GetAsync(requestUrl);
+                response.EnsureSuccessStatusCode(); // Throw on error code.
+
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                // Note: AISStream provides data as a stream of JSON objects, not a single array.
+                // You'll need to handle this streaming nature. For simplicity, this example
+                // assumes a way to get a list of vessels, which might require a different endpoint
+                // or a library that handles the stream.
+                // This is a placeholder for actual stream parsing logic.
+                // You might need to use a library like System.Reactive or manually process the stream.
+
+                // Placeholder: Deserialize the JSON. This will need to be adapted based on the actual
+                // structure of the AISStream response and how you handle the stream.
+                // If the API returns a stream of individual JSON objects, you'll need to parse them one by one.
+                // For this example, let's assume a simplified scenario where you get a list.
+                // You will likely need to adjust the AISVesselData class to match the API's fields.
+                var vessels = JsonSerializer.Deserialize<List<AISVesselData>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return vessels ?? new List<AISVesselData>();
             }
-            else if (date.Date == tomorrow)
+            catch (HttpRequestException e)
             {
-                mockVessels.AddRange(new[]
-                {
-                    new AISVesselData
-                    {
-                        MMSI = "555555555",
-                        Name = "Tomorrow Mariner",
-                        VesselType = "Cargo",
-                        Latitude = 42.05,
-                        Longitude = -73.92,
-                        SOG = 9.0,
-                        COG = 190.0,
-                        Timestamp = DateTime.UtcNow.AddDays(1)
-                    },
-                    new AISVesselData
-                    {
-                        MMSI = "666666666",
-                        Name = "Future Freighter",
-                        VesselType = "Freighter",
-                        Latitude = 41.98,
-                        Longitude = -73.99,
-                        SOG = 7.5,
-                        COG = 210.0,
-                        Timestamp = DateTime.UtcNow.AddDays(1)
-                    }
-                });
+                // Log error (e.g., using ILogger)
+                Console.WriteLine($"Request error: {e.Message}");
+                return new List<AISVesselData>(); // Return empty list on error
             }
-
-            // Log the mock data as JSON for debugging
-            var json = System.Text.Json.JsonSerializer.Serialize(mockVessels);
-            Console.WriteLine("Mock AIS data: " + json);
-
-            return Task.FromResult(mockVessels);
         }
 
         // Utility: Calculate distance (nautical miles) between two points (Haversine formula)
