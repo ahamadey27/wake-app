@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Net.Http; // Keep for now, might be used by other methods not shown
+using System.Net.WebSockets;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
-using System.IO; // Added for StreamReader
-using System.Text.Json.Serialization; // Added for JsonPropertyName
+using Microsoft.Extensions.Logging; // Added for logging
+using System.IO;
+using System.Text.Json.Serialization;
+using System.Threading; // Added for CancellationToken
+using System.Threading.Tasks; // Added for Task
 
 namespace WakeAdvisor.Services
 {
@@ -21,7 +25,7 @@ namespace WakeAdvisor.Services
     {
         public string? MMSI { get; set; } // Maritime Mobile Service Identity
         public string? Name { get; set; }
-        public string? VesselType { get; set; }
+        public string? VesselType { get; set; } // Textual, e.g., "Cargo", "Tanker"
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public double SOG { get; set; } // Speed Over Ground (knots)
@@ -39,46 +43,66 @@ namespace WakeAdvisor.Services
         public double DistanceToKingstonNM { get; set; } // Nautical miles
     }
 
-    // DTO for parsing messages from AIS Stream
-    public class AisStreamMessageDto
+    // DTO for the subscription message to AIS Stream
+    public class AisSubscriptionMessageDto
     {
-        [JsonPropertyName("mmsi")]
+        [JsonPropertyName("APIKey")]
+        public string? ApiKey { get; set; }
+
+        [JsonPropertyName("BoundingBoxes")]
+        public List<List<List<double>>>? BoundingBoxes { get; set; } // e.g. [[[lat_south, lon_west], [lat_north, lon_east]]]
+    }
+
+    // Outer container for any AIS Stream message
+    public class AisMessageContainerDto
+    {
+        [JsonPropertyName("MessageType")]
+        public string? MessageType { get; set; }
+
+        [JsonPropertyName("Message")]
+        public JsonElement Message { get; set; } // Use JsonElement to deserialize specific message type later
+    }
+
+    // Specific DTO for PositionReport messages (nested within AisMessageContainerDto.Message)
+    public class PositionReportDto
+    {
+        [JsonPropertyName("UserID")] // This is the MMSI
         public int Mmsi { get; set; }
 
-        [JsonPropertyName("name")]
+        // Name is often part of ShipStaticData message, not always in PositionReport.
+        // For simplicity, we'll try to get it if available, but it might be null.
+        [JsonPropertyName("Name")]
         public string? Name { get; set; }
 
-        [JsonPropertyName("latitude")]
+        [JsonPropertyName("Latitude")]
         public double Latitude { get; set; }
 
-        [JsonPropertyName("longitude")]
+        [JsonPropertyName("Longitude")]
         public double Longitude { get; set; }
 
-        [JsonPropertyName("sog")] // Speed over ground in knots
-        public double Sog { get; set; }
+        [JsonPropertyName("Sog")] // Speed over ground in 0.1 knots. API: 1023=N/A
+        public double? Sog { get; set; }
 
-        [JsonPropertyName("cog")] // Course over ground in degrees
-        public double Cog { get; set; }
+        [JsonPropertyName("Cog")] // Course over ground in 0.1 degrees. API: 3600=N/A
+        public double? Cog { get; set; }
 
-        [JsonPropertyName("true_heading")] // AIS HEADING: 0-359 degrees, 511 = not available
+        [JsonPropertyName("TrueHeading")] // 0-359 degrees, 511 = not available
         public int? TrueHeading { get; set; }
 
-        [JsonPropertyName("ship_type")] // AIS numeric ship type
-        public int? ShipTypeNumeric { get; set; }
-        
-        // In a real scenario, AIS Stream might provide a textual ship type directly,
-        // or you might subscribe to a stream that enriches data this way.
-        // Example: [JsonPropertyName("vessel_type_text")]
-        // public string VesselTypeText { get; set; }
+        [JsonPropertyName("ShipType")] // AIS numeric ship type
+        public int? ShipType { get; set; }
 
-        [JsonPropertyName("timestamp")] // Or "time_utc", "ts", etc. - adjust to actual field name
+        [JsonPropertyName("Timestamp")] // UTC timestamp as string e.g. "2021-09-01T12:34:56.789Z"
         public DateTime Timestamp { get; set; }
     }
 
+
     public class FreighterService
     {
-        private readonly HttpClient _httpClient;
+        // HttpClient might not be strictly needed if all AIS comms are via WebSocket
+        // private readonly HttpClient _httpClient; 
         private readonly IConfiguration _configuration;
+        private readonly ILogger<FreighterService> _logger;
 
         // Kingston Point reference coordinates
         private static readonly GeoPoint KingstonPoint = new GeoPoint
@@ -91,10 +115,11 @@ namespace WakeAdvisor.Services
         private const double SouthboundMin = 160.0;
         private const double SouthboundMax = 220.0;
 
-        public FreighterService(HttpClient httpClient, IConfiguration configuration)
+        public FreighterService(IConfiguration configuration, ILogger<FreighterService> logger /*, HttpClient httpClient*/)
         {
-            _httpClient = httpClient;
+            // _httpClient = httpClient;
             _configuration = configuration;
+            _logger = logger;
         }
 
         // Main entry point: gets southbound freighters and their ETAs
@@ -164,93 +189,163 @@ namespace WakeAdvisor.Services
 
             // Based on common AIS ship type categorizations
             // See https://www.navcen.uscg.gov/ais-messages (e.g., Type 5, field 10)
-            if (type >= 70 && type <= 79) return "Cargo";       // Cargo ships
-            if (type >= 80 && type <= 89) return "Tanker";      // Tankers (often broadly considered freighters)
-            if (type == 30) return "Fishing";
-            if (type >= 60 && type <= 69) return "Passenger";
-            // Add more specific mappings as needed for your application's logic
-            // For example, you might want to differentiate various cargo types if the numeric code allows.
-            return $"Type {type}"; // Default for unmapped types
+            // AIS Standard Ship Types:
+            // 70-79: Cargo ships
+            // 80-89: Tankers
+            // Consider others if necessary (e.g., 60-69 Passenger, 30 Fishing)
+            if (type >= 70 && type <= 79) return "Cargo";
+            if (type >= 80 && type <= 89) return "Tanker";
+            // Add more specific mappings if needed
+            // if (type == 0) return "Not available or no ship"; // Default value
+            // if (type == 30) return "Fishing";
+            // if (type >= 60 && type <= 69) return "Passenger";
+            return $"Type {type}"; // Default for unmapped/other types
         }
 
-        // Fetches AIS vessel data from the AIS Stream API
+        // Fetches AIS vessel data from the AIS Stream API using WebSockets
         private async Task<List<AISVesselData>> GetAISVesselsAsync(DateTime selectedDate)
         {
             var apiKey = _configuration["AISStreamApiKey"];
-            // Bounding box for Kingston, NY area (adjust as needed)
-            // Format: BBOX = minLongitude,minLatitude,maxLongitude,maxLatitude
-            var boundingBox = "-74.05,41.90,-73.85,42.00"; // Example, adjust as needed
-            var requestUrl = $"https://stream.aisstream.io/v0/stream?bbox={boundingBox}";
-
-            // AISStream might require API key in URL or as a Bearer token.
-            // This implementation uses Bearer token as per previous setup.
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            // If API key is needed in query: requestUrl += $"&apikey={apiKey}";
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                _logger.LogError("AIS Stream API Key is not configured.");
+                return new List<AISVesselData>();
+            }
 
             var vessels = new List<AISVesselData>();
             var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            
+            // Kingston Bounding Box: [[LAT_SOUTH, LON_WEST], [LAT_NORTH, LON_EAST]]
+            // Approx. +/- 0.5 degrees from Kingston Point (41.9275 N, -73.9639 W)
+            // Lat: 41.4275 to 42.4275, Lon: -74.4639 to -73.4639
+            var boundingBoxes = new List<List<List<double>>>
+            {
+                new List<List<double>>
+                {
+                    new List<double> { 41.4275, -74.4639 }, // South-West corner
+                    new List<double> { 42.4275, -73.4639 }  // North-East corner
+                }
+            };
+
+            var subscriptionMessage = new AisSubscriptionMessageDto
+            {
+                ApiKey = apiKey,
+                BoundingBoxes = boundingBoxes
+            };
+            var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, jsonOptions);
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)); // Listen for 20 seconds then timeout
+            using var client = new ClientWebSocket();
 
             try
             {
-                // HttpCompletionOption.ResponseHeadersRead is important for processing streams
-                // as it allows you to start processing the content as it arrives.
-                using var response = await _httpClient.GetAsync(requestUrl, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode(); // Throw on error code.
+                _logger.LogInformation("Connecting to AIS Stream API...");
+                await client.ConnectAsync(new Uri("wss://stream.aisstream.io/v0/stream"), cts.Token);
+                _logger.LogInformation("Connected. Sending subscription message.");
 
-                using var responseStream = await response.Content.ReadAsStreamAsync();
-                using var reader = new StreamReader(responseStream);
+                var sendBuffer = Encoding.UTF8.GetBytes(subscriptionJson);
+                await client.SendAsync(new ArraySegment<byte>(sendBuffer), WebSocketMessageType.Text, true, cts.Token);
+                _logger.LogInformation("Subscription message sent. Listening for data...");
 
-                string? line;
-                while ((line = await reader.ReadLineAsync()) != null)
+                var receiveBuffer = new byte[8192]; // 8KB buffer
+                
+                // Listen for a certain period or until a number of messages are received.
+                // For this example, we'll use the CancellationTokenSource's timeout.
+                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(15); // Collect data for 15 seconds after subscription
+
+                while (client.State == WebSocketState.Open && DateTime.UtcNow < dataCollectionEndTime && !cts.Token.IsCancellationRequested)
                 {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    try
+                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // Timeout for individual message
+                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, messageCts.Token);
+                    
+                    WebSocketReceiveResult result;
+                    using var ms = new MemoryStream();
+                    do
                     {
-                        // Assuming each line is a self-contained JSON object from AIS Stream.
-                        // The AisStreamMessageDto needs to accurately reflect the structure of these objects.
-                        var aisMessage = JsonSerializer.Deserialize<AisStreamMessageDto>(line, jsonOptions);
-
-                        if (aisMessage != null)
+                        var segment = new ArraySegment<byte>(receiveBuffer);
+                        result = await client.ReceiveAsync(segment, linkedCts.Token);
+                        if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            // Map DTO to AISVesselData
-                            vessels.Add(new AISVesselData
-                            {
-                                MMSI = aisMessage.Mmsi.ToString(),
-                                Name = aisMessage.Name, // Can be null if not provided in the message (CS8601 addressed by making AISVesselData.Name nullable)
-                                // Use mapped ship type. The filter in GetSouthboundFreighterInfoAsync expects "freighter" or "cargo".
-                                VesselType = MapShipTypeNumericToText(aisMessage.ShipTypeNumeric),
-                                Latitude = aisMessage.Latitude,
-                                Longitude = aisMessage.Longitude,
-                                SOG = aisMessage.Sog,
-                                // Prefer TrueHeading if available and valid, otherwise use COG.
-                                // AIS TrueHeading 511 means "not available".
-                                COG = (aisMessage.TrueHeading.HasValue && aisMessage.TrueHeading.Value != 511)
-                                      ? aisMessage.TrueHeading.Value
-                                      : aisMessage.Cog,
-                                Timestamp = aisMessage.Timestamp // Ensure this is correctly parsed (e.g., as UTC)
-                            });
+                            _logger.LogWarning("AIS Stream API closed the connection.");
+                            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closing", CancellationToken.None);
+                            return vessels;
                         }
-                    }
-                    catch (JsonException jsonEx)
+                        ms.Write(segment.Array!, segment.Offset, result.Count);
+                    } while (!result.EndOfMessage && !linkedCts.Token.IsCancellationRequested);
+
+                    if (linkedCts.Token.IsCancellationRequested && !cts.Token.IsCancellationRequested)
                     {
-                        // Log error for a single malformed line, but attempt to continue with the stream.
-                        // In a production app, use ILogger.
-                        Console.WriteLine($"Error parsing AIS data line: {jsonEx.Message}. Line: '{line}'");
+                        _logger.LogWarning("Timeout receiving a single WebSocket message.");
+                        continue; // Try to receive next message if overall timeout not reached
+                    }
+                    
+                    ms.Seek(0, SeekOrigin.Begin);
+                    if (ms.Length > 0)
+                    {
+                        var messageJson = Encoding.UTF8.GetString(ms.ToArray());
+                        _logger.LogDebug("Received AIS message: {MessageJson}", messageJson);
+
+                        try
+                        {
+                            var container = JsonSerializer.Deserialize<AisMessageContainerDto>(messageJson, jsonOptions);
+                            if (container?.MessageType == "PositionReport")
+                            {
+                                var positionReport = JsonSerializer.Deserialize<PositionReportDto>(container.Message.GetRawText(), jsonOptions);
+                                if (positionReport != null)
+                                {
+                                    // AIS SOG is in 0.1 knots, COG in 0.1 degrees. Convert them.
+                                    // 1023 for SOG means not available. 3600 for COG means not available.
+                                    double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
+                                    double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
+
+                                    vessels.Add(new AISVesselData
+                                    {
+                                        MMSI = positionReport.Mmsi.ToString(),
+                                        Name = positionReport.Name, // May be null
+                                        Latitude = positionReport.Latitude,
+                                        Longitude = positionReport.Longitude,
+                                        SOG = sogKnots,
+                                        COG = cogDegrees,
+                                        Timestamp = positionReport.Timestamp, // Assuming this is already UTC
+                                        VesselType = MapShipTypeNumericToText(positionReport.ShipType)
+                                    });
+                                }
+                            }
+                            // else: Handle other message types if needed (e.g., ShipStaticData for names)
+                        }
+                        catch (JsonException jsonEx)
+                        {
+                            _logger.LogError(jsonEx, "Error deserializing AIS message: {MessageJson}", messageJson);
+                        }
                     }
                 }
             }
-            catch (HttpRequestException e)
+            catch (WebSocketException wsEx)
             {
-                // Log request error (e.g., using ILogger)
-                Console.WriteLine($"AIS API Request error: {e.Message}");
-                // Depending on requirements, you might rethrow, or return empty/partial list.
+                _logger.LogError(wsEx, "WebSocket error while communicating with AIS Stream API.");
             }
-            // Note: A true real-time stream from AISStream might be continuous.
-            // This implementation assumes the stream will eventually end (e.g., server closes it after sending a burst of data,
-            // or connection is dropped). For a web request context, this is a common pattern.
-            // If it's a long-lived persistent stream, a different architecture (e.g., background service) would be needed.
-            return vessels;
+            catch (OperationCanceledException) // Catches CancellationTokenSource timeout
+            {
+                _logger.LogInformation("AIS data collection period ended or task was cancelled.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching AIS vessel data.");
+            }
+            finally
+            {
+                if (client.State == WebSocketState.Open || client.State == WebSocketState.CloseReceived)
+                {
+                    await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing connection", CancellationToken.None);
+                }
+                _logger.LogInformation("AIS Stream connection closed. Collected {Count} vessels.", vessels.Count);
+            }
+            
+            // Deduplicate vessels by MMSI, keeping the latest report
+            return vessels
+                .GroupBy(v => v.MMSI)
+                .Select(g => g.OrderByDescending(v => v.Timestamp).First())
+                .ToList();
         }
 
         // Utility: Calculate distance (nautical miles) between two points (Haversine formula)

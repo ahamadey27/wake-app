@@ -61,7 +61,7 @@
                                         Time = DateTime.TryParseExact(tp.Time, formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : (DateTime?)null
                                     })
                                     .Where(x => x.Time.HasValue)
-                                    .OrderBy(x => Math.Abs((x.Time.Value - info.ETAAtKingston).TotalMinutes))
+                                    .OrderBy(x => Math.Abs((x.Time!.Value - info.ETAAtKingston).TotalMinutes))
                                     .FirstOrDefault();
                                 if (closest != null && double.TryParse(closest.Prediction.Value, out var tideVal))
                                 {
