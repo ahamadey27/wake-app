@@ -275,49 +275,43 @@ namespace WakeAdvisor.Services
                 while (client.State == WebSocketState.Open && DateTime.UtcNow < dataCollectionEndTime && !cts.Token.IsCancellationRequested)
                 {
                     receiveLoopIterations++;
-                    _logger.LogDebug("Receive loop iteration {Iteration}, elapsed listen time: {ElapsedMs}ms", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
-
-                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    // Changed to LogInformation to ensure it appears on the console
+                    _logger.LogInformation("Receive loop iteration {Iteration}, elapsed listen time: {ElapsedMs}ms. Attempting to receive...", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
+                    
+                    // Increased timeout for individual message to 30 seconds
+                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(30)); 
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, messageCts.Token);
                     
                     WebSocketReceiveResult result;
                     using var ms = new MemoryStream();
-                    do
+                    try
                     {
-                        var segment = new ArraySegment<byte>(receiveBuffer);
-                        result = await client.ReceiveAsync(segment, linkedCts.Token);
-                        if (result.MessageType == WebSocketMessageType.Close)
+                        do
                         {
-                            _logger.LogWarning("AIS Stream API closed the connection. Status: {CloseStatus}, Description: {StatusDescription}", result.CloseStatus, result.CloseStatusDescription);
-                            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledging close", CancellationToken.None);
-                            listenStopwatch.Stop();
-                            return vessels;
-                        }
-                        ms.Write(segment.Array!, segment.Offset, result.Count);
-                    } while (!result.EndOfMessage && !linkedCts.Token.IsCancellationRequested);
+                            var segment = new ArraySegment<byte>(receiveBuffer);
+                            result = await client.ReceiveAsync(segment, linkedCts.Token);
+                            if (result.MessageType == WebSocketMessageType.Close)
+                            {
+                                _logger.LogWarning("AIS Stream API closed the connection. Status: {CloseStatus}, Description: {StatusDescription}", result.CloseStatus, result.CloseStatusDescription);
+                                await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledging close", CancellationToken.None);
+                                listenStopwatch.Stop();
+                                return vessels;
+                            }
+                            ms.Write(segment.Array!, segment.Offset, result.Count);
+                        } while (!result.EndOfMessage && !linkedCts.Token.IsCancellationRequested);
+                    }
+                    catch (OperationCanceledException oce) when (messageCts.Token.IsCancellationRequested)
+                    {
+                        _logger.LogWarning(oce, "Timeout (30s) receiving a single WebSocket message/chunk. Iteration: {Iteration}. Elapsed: {ElapsedMs}ms. Continuing to listen if time permits.", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
+                        continue; // Continue to the next iteration of the while loop
+                    }
+                    // If linkedCts was cancelled by cts (overall timeout), it will be caught by the outer catch block.
 
-                    if (linkedCts.Token.IsCancellationRequested && !cts.Token.IsCancellationRequested && !messageCts.Token.IsCancellationRequested)
-                    {
-                        // This case should ideally not happen if linkedCts is only cancelled by cts or messageCts
-                         _logger.LogWarning("LinkedCts cancelled without main CTS or message CTS being the primary cause.");
-                    }
-                    else if (messageCts.Token.IsCancellationRequested)
-                    {
-                        _logger.LogWarning("Timeout receiving a single WebSocket message chunk after {ElapsedMs}ms in this attempt.", listenStopwatch.ElapsedMilliseconds);
-                        // Continue to next iteration of the outer while loop to try receiving again if overall time permits
-                        continue;
-                    }
-                     else if (cts.Token.IsCancellationRequested)
-                    {
-                        _logger.LogInformation("Overall cancellation token triggered during receive.");
-                        break; // Exit while loop
-                    }
-                    
                     ms.Seek(0, SeekOrigin.Begin);
                     if (ms.Length > 0)
                     {
                         var messageJson = Encoding.UTF8.GetString(ms.ToArray());
-                        _logger.LogDebug("Received AIS message (Length: {Length}): {MessageJson}", ms.Length, messageJson);
+                        _logger.LogInformation("Received raw data (Length: {Length}): {MessageJson}", ms.Length, messageJson); // Changed to LogInformation
 
                         try
                         {
@@ -335,20 +329,18 @@ namespace WakeAdvisor.Services
                                     var positionReport = JsonSerializer.Deserialize<AisPositionReportDto>(positionReportElement.GetRawText(), jsonOptions);
                                     if (positionReport != null)
                                     {
-                                        // SOG is in 0.1 knots, COG in 0.1 degrees. Convert them.
-                                        // 1023 for SOG means not available. 3600 for COG means not available.
                                         double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
                                         double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
 
                                         vessels.Add(new AISVesselData
                                         {
-                                            MMSI = positionReport.UserId.ToString(), // From PositionReport.UserID (int)
-                                            Name = envelope.MetaData?.ShipName,      // From MetaData.ShipName (string)
+                                            MMSI = positionReport.UserId.ToString(),
+                                            Name = envelope.MetaData?.ShipName,
                                             Latitude = positionReport.Latitude,
                                             Longitude = positionReport.Longitude,
                                             SOG = sogKnots,
                                             COG = cogDegrees,
-                                            Timestamp = positionReport.Timestamp, // This is the timestamp from the AIS message itself
+                                            Timestamp = positionReport.Timestamp, 
                                             VesselType = MapShipTypeNumericToText(positionReport.ShipType)
                                         });
                                         _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}, Name: {Name}, Lat: {Lat}, Lon: {Lon}, SOG: {Sog}kn, COG: {Cog}deg, Type: {ShipTypeNum}, Timestamp: {Ts}", 
@@ -368,31 +360,26 @@ namespace WakeAdvisor.Services
                         }
                         catch (JsonException jsonEx)
                         {
-                            _logger.LogError(jsonEx, "Error deserializing AIS message: {MessageJson}", messageJson);
+                            _logger.LogError(jsonEx, "Error deserializing AIS message (JSON likely incomplete or not an envelope): {MessageJson}", messageJson);
                         }
                     }
-                    else if (result.MessageType != WebSocketMessageType.Close) // No data received, but not a close message
+                    else if (result.MessageType != WebSocketMessageType.Close)
                     {
-                        _logger.LogDebug("Received empty message or EndOfMessage without data. MessageType: {MessageType}", result.MessageType);
+                        _logger.LogInformation("Received empty message or EndOfMessage without data. MessageType: {MessageType}. Iteration: {Iteration}", result.MessageType, receiveLoopIterations);
                     }
                 }
-                 listenStopwatch.Stop();
+                listenStopwatch.Stop();
                 _logger.LogInformation("Finished listening for AIS data after {ElapsedMs}ms. Loop iterations: {Iterations}", listenStopwatch.ElapsedMilliseconds, receiveLoopIterations);
-
             }
-            catch (WebSocketException wsEx)
-            {
-                _logger.LogError(wsEx, "WebSocket error while communicating with AIS Stream API.");
-            }
-            catch (OperationCanceledException) 
+            catch (OperationCanceledException ex) 
             {
                 if (cts.Token.IsCancellationRequested)
                 {
-                    _logger.LogInformation("AIS data collection task was cancelled due to overall timeout ({TotalSeconds}s).", cts.Token.CanBeCanceled ? TimeSpan.FromSeconds(60).TotalSeconds : 0);
+                    _logger.LogInformation(ex, "AIS data collection task was cancelled due to overall timeout ({TotalSeconds}s).", TimeSpan.FromSeconds(60).TotalSeconds);
                 }
                 else
                 {
-                     _logger.LogInformation("AIS data collection task was cancelled (not by overall timeout).");
+                     _logger.LogWarning(ex, "AIS data collection task was cancelled (not by overall timeout, possibly by individual message timeout or other cancellation).");
                 }
             }
             catch (Exception ex)
