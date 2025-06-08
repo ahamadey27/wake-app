@@ -76,8 +76,8 @@ namespace WakeAdvisor.Services
         [JsonPropertyName("ShipName")]
         public string? ShipName { get; set; }
 
-        [JsonPropertyName("MMSI")] // MMSI in MetaData is a string
-        public string? Mmsi { get; set; }
+        [JsonPropertyName("MMSI")] 
+        public long? Mmsi { get; set; } // Changed from string? to long?
 
         [JsonPropertyName("time_utc")]
         public DateTime TimeUtc {get; set;} // Timestamp of when the message was received by the AISStream server
