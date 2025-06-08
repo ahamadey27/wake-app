@@ -248,12 +248,12 @@ namespace WakeAdvisor.Services
             {
                 ApiKey = apiKey,
                 BoundingBoxes = boundingBoxes,
-                FilterMessageTypes = new List<string> { "PositionReport" } // Explicitly request PositionReport
+                FilterMessageTypes = null // Temporarily set to null to receive all message types
             };
-            var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, jsonOptions);
-            _logger.LogInformation("AIS Stream Subscription JSON: {SubscriptionJson}", subscriptionJson);
+            var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }); // Ensure camelCase for API
+            _logger.LogInformation("AIS Stream Subscription JSON (receiving all types): {SubscriptionJson}", subscriptionJson);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout
             using var client = new ClientWebSocket();
             Stopwatch listenStopwatch = new Stopwatch();
 
@@ -261,24 +261,26 @@ namespace WakeAdvisor.Services
             {
                 _logger.LogInformation("Connecting to AIS Stream API (wss://stream.aisstream.io/v0/stream)...");
                 await client.ConnectAsync(new Uri("wss://stream.aisstream.io/v0/stream"), cts.Token);
-                _logger.LogInformation("Connected. Sending subscription message.");
+                _logger.LogInformation("Connected. Waiting a moment before sending subscription...");
+                await Task.Delay(TimeSpan.FromSeconds(1), cts.Token); // Small delay after connect
 
+                _logger.LogInformation("Sending subscription message.");
                 var sendBuffer = Encoding.UTF8.GetBytes(subscriptionJson);
                 await client.SendAsync(new ArraySegment<byte>(sendBuffer), WebSocketMessageType.Text, true, cts.Token);
-                _logger.LogInformation("Subscription message sent. Listening for data...");
+                _logger.LogInformation("Subscription message sent. Waiting a moment before listening...");
+                await Task.Delay(TimeSpan.FromSeconds(2), cts.Token); // Slightly longer delay after subscription
 
+                _logger.LogInformation("Starting to listen for data...");
                 var receiveBuffer = new byte[8192];
-                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(45);
+                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(45); // Listen for up to 45s after delays
                 listenStopwatch.Start();
                 int receiveLoopIterations = 0;
 
                 while (client.State == WebSocketState.Open && DateTime.UtcNow < dataCollectionEndTime && !cts.Token.IsCancellationRequested)
                 {
                     receiveLoopIterations++;
-                    // Changed to LogInformation to ensure it appears on the console
-                    _logger.LogInformation("Receive loop iteration {Iteration}, elapsed listen time: {ElapsedMs}ms. Attempting to receive...", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
+                    _logger.LogInformation("Receive loop iteration {Iteration}, client state: {ClientState}, elapsed listen time: {ElapsedMs}ms. Attempting to receive...", receiveLoopIterations, client.State, listenStopwatch.ElapsedMilliseconds);
                     
-                    // Increased timeout for individual message to 30 seconds
                     using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(30)); 
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, messageCts.Token);
                     
@@ -302,16 +304,21 @@ namespace WakeAdvisor.Services
                     }
                     catch (OperationCanceledException oce) when (messageCts.Token.IsCancellationRequested)
                     {
-                        _logger.LogWarning(oce, "Timeout (30s) receiving a single WebSocket message/chunk. Iteration: {Iteration}. Elapsed: {ElapsedMs}ms. Continuing to listen if time permits.", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
-                        continue; // Continue to the next iteration of the while loop
+                        _logger.LogWarning(oce, "Timeout (30s) receiving a single WebSocket message/chunk. Iteration: {Iteration}. Client State: {ClientState}. Elapsed: {ElapsedMs}ms. Continuing to listen if time permits.", receiveLoopIterations, client.State, listenStopwatch.ElapsedMilliseconds);
+                        // Check client state here before continuing
+                        if(client.State != WebSocketState.Open)
+                        {
+                            _logger.LogWarning("Client state is {ClientState} after receive timeout, breaking receive loop.", client.State);
+                            break; // Exit while loop if state is no longer open
+                        }
+                        continue; 
                     }
-                    // If linkedCts was cancelled by cts (overall timeout), it will be caught by the outer catch block.
-
+                    
                     ms.Seek(0, SeekOrigin.Begin);
                     if (ms.Length > 0)
                     {
                         var messageJson = Encoding.UTF8.GetString(ms.ToArray());
-                        _logger.LogInformation("Received raw data (Length: {Length}): {MessageJson}", ms.Length, messageJson); // Changed to LogInformation
+                        _logger.LogInformation("Received raw data (Length: {Length}): {MessageJson}", ms.Length, messageJson); 
 
                         try
                         {
@@ -369,31 +376,31 @@ namespace WakeAdvisor.Services
                     }
                 }
                 listenStopwatch.Stop();
-                _logger.LogInformation("Finished listening for AIS data after {ElapsedMs}ms. Loop iterations: {Iterations}", listenStopwatch.ElapsedMilliseconds, receiveLoopIterations);
+                _logger.LogInformation("Finished listening for AIS data after {ElapsedMs}ms. Loop iterations: {Iterations}. Final Client State: {ClientState}", listenStopwatch.ElapsedMilliseconds, receiveLoopIterations, client.State);
             }
             catch (OperationCanceledException ex) 
             {
                 if (cts.Token.IsCancellationRequested)
                 {
-                    _logger.LogInformation(ex, "AIS data collection task was cancelled due to overall timeout ({TotalSeconds}s).", TimeSpan.FromSeconds(60).TotalSeconds);
+                    _logger.LogInformation(ex, "AIS data collection task was cancelled due to overall timeout ({TotalSeconds}s). ClientState: {ClientState}", TimeSpan.FromSeconds(60).TotalSeconds, client.State);
                 }
                 else
                 {
-                     _logger.LogWarning(ex, "AIS data collection task was cancelled (not by overall timeout, possibly by individual message timeout or other cancellation).");
+                     _logger.LogWarning(ex, "AIS data collection task was cancelled (not by overall timeout, possibly by individual message timeout or other cancellation). ClientState: {ClientState}", client.State);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching AIS vessel data.");
+                _logger.LogError(ex, "Error fetching AIS vessel data. ClientState: {ClientState}", client.State);
             }
             finally
             {
                 if (client.State == WebSocketState.Open || client.State == WebSocketState.CloseReceived)
                 {
-                    _logger.LogInformation("Closing AIS Stream connection.");
+                    _logger.LogInformation("Closing AIS Stream connection. Current State: {ClientState}", client.State);
                     await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing connection", CancellationToken.None);
                 }
-                _logger.LogInformation("AIS Stream connection process finished. Collected {Count} unique vessels.", vessels.Count);
+                _logger.LogInformation("AIS Stream connection process finished. Collected {Count} unique vessels. Final Client State: {ClientState}", vessels.Count, client.State);
             }
             
             return vessels
