@@ -164,7 +164,7 @@ namespace WakeAdvisor.Services
 
         // Adding other fields observed in logs to prevent deserialization issues if they appear
         [JsonPropertyName("MMSI_String")]
-        public string? MmsiString { get; set; }
+        public long? MmsiString { get; set; } // Changed from string? to long?
 
         [JsonPropertyName("latitude")]
         public double? Latitude { get; set; }
@@ -336,10 +336,10 @@ namespace WakeAdvisor.Services
             {
                 ApiKey = apiKey,
                 BoundingBoxes = boundingBoxes,
-                FilterMessageTypes = null // Temporarily set to null to receive all message types
+                FilterMessageTypes = new List<string> { "PositionReport" } // Re-enabled to filter for PositionReport
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }); // Ensure camelCase for API
-            _logger.LogInformation("AIS Stream Subscription JSON (receiving all types): {SubscriptionJson}", subscriptionJson);
+            _logger.LogInformation("AIS Stream Subscription JSON (filtering for PositionReport): {SubscriptionJson}", subscriptionJson);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout
             using var client = new ClientWebSocket();
@@ -449,8 +449,12 @@ namespace WakeAdvisor.Services
                             }
                             else
                             {
-                                _logger.LogInformation("Received AIS message of type: {MessageType}. MetaData MMSI: {MetaMmsi}, MetaData ShipName: {MetaShipName}. Raw content: {MessageJson}", 
-                                    envelope.MessageType, envelope.MetaData?.Mmsi.ToString() ?? "N/A", envelope.MetaData?.ShipName ?? "N/A", messageJson);
+                                _logger.LogInformation("Received AIS message of type: {MessageType}. MetaData MMSI: {MetaMmsi}, MetaData MMSI_String: {MetaMmsiString}, MetaData ShipName: {MetaShipName}. Raw content: {MessageJson}", 
+                                    envelope.MessageType, 
+                                    envelope.MetaData?.Mmsi.ToString() ?? "N/A", 
+                                    envelope.MetaData?.MmsiString.ToString() ?? "N/A", // Adjusted for long?
+                                    envelope.MetaData?.ShipName ?? "N/A", 
+                                    messageJson);
                             }
                         }
                         catch (JsonException jsonEx)
