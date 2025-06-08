@@ -7,7 +7,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging; // Added for logging
 using System.IO;
-using System.Text.Json.Serialization;
+using System.Text.Json.Serialization; // Ensure this is present for JsonIgnoreCondition
 using System.Threading; // Added for CancellationToken
 using System.Threading.Tasks; // Added for Task
 using System.Diagnostics; // For Stopwatch
@@ -51,29 +51,43 @@ namespace WakeAdvisor.Services
         public string? ApiKey { get; set; }
 
         [JsonPropertyName("BoundingBoxes")]
-        public List<List<List<double>>>? BoundingBoxes { get; set; } // e.g. [[[lat_south, lon_west], [lat_north, lon_east]]]
+        public List<List<List<double>>>? BoundingBoxes { get; set; }
+
+        [JsonPropertyName("FilterMessageTypes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? FilterMessageTypes { get; set; }
     }
 
-    // Outer container for any AIS Stream message
-    public class AisMessageContainerDto
+    // Outer envelope for any AIS Stream message
+    public class AisStreamEnvelopeDto
     {
         [JsonPropertyName("MessageType")]
         public string? MessageType { get; set; }
 
+        [JsonPropertyName("MetaData")]
+        public AisStreamMetaDataDto? MetaData { get; set; }
+
         [JsonPropertyName("Message")]
-        public JsonElement Message { get; set; } // Use JsonElement to deserialize specific message type later
+        public JsonElement Message { get; set; } // Raw JSON of the inner message part
     }
 
-    // Specific DTO for PositionReport messages (nested within AisMessageContainerDto.Message)
-    public class PositionReportDto
+    public class AisStreamMetaDataDto
     {
-        [JsonPropertyName("UserID")] // This is the MMSI
-        public int Mmsi { get; set; }
+        [JsonPropertyName("ShipName")]
+        public string? ShipName { get; set; }
 
-        // Name is often part of ShipStaticData message, not always in PositionReport.
-        // For simplicity, we'll try to get it if available, but it might be null.
-        [JsonPropertyName("Name")]
-        public string? Name { get; set; }
+        [JsonPropertyName("MMSI")] // MMSI in MetaData is a string
+        public string? Mmsi { get; set; }
+
+        [JsonPropertyName("time_utc")]
+        public DateTime TimeUtc {get; set;} // Timestamp of when the message was received by the AISStream server
+    }
+
+    // Specific DTO for the content of Message.PositionReport
+    public class AisPositionReportDto
+    {
+        [JsonPropertyName("UserID")] // This is the MMSI as an integer
+        public int UserId { get; set; }
 
         [JsonPropertyName("Latitude")]
         public double Latitude { get; set; }
@@ -81,10 +95,10 @@ namespace WakeAdvisor.Services
         [JsonPropertyName("Longitude")]
         public double Longitude { get; set; }
 
-        [JsonPropertyName("Sog")] // Speed over ground in 0.1 knots. API: 1023=N/A
+        [JsonPropertyName("Sog")] // Speed over ground in 0.1 knot steps (0-102.2 knots). 1023 = not available.
         public double? Sog { get; set; }
 
-        [JsonPropertyName("Cog")] // Course over ground in 0.1 degrees. API: 3600=N/A
+        [JsonPropertyName("Cog")] // Course over ground in 0.1 degree steps (0-359.9 degrees). 3600 = not available.
         public double? Cog { get; set; }
 
         [JsonPropertyName("TrueHeading")] // 0-359 degrees, 511 = not available
@@ -93,7 +107,7 @@ namespace WakeAdvisor.Services
         [JsonPropertyName("ShipType")] // AIS numeric ship type
         public int? ShipType { get; set; }
 
-        [JsonPropertyName("Timestamp")] // UTC timestamp as string e.g. "2021-09-01T12:34:56.789Z"
+        [JsonPropertyName("Timestamp")] // UTC timestamp of the AIS message generation
         public DateTime Timestamp { get; set; }
     }
 
@@ -233,14 +247,13 @@ namespace WakeAdvisor.Services
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
                 ApiKey = apiKey,
-                BoundingBoxes = boundingBoxes
-                // Consider adding: FilterMessageTypes = new List<string> { "PositionReport" }
+                BoundingBoxes = boundingBoxes,
+                FilterMessageTypes = new List<string> { "PositionReport" } // Explicitly request PositionReport
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, jsonOptions);
             _logger.LogInformation("AIS Stream Subscription JSON: {SubscriptionJson}", subscriptionJson);
 
-            // Increased overall timeout and data collection window
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout for the operation
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             using var client = new ClientWebSocket();
             Stopwatch listenStopwatch = new Stopwatch();
 
@@ -255,8 +268,7 @@ namespace WakeAdvisor.Services
                 _logger.LogInformation("Subscription message sent. Listening for data...");
 
                 var receiveBuffer = new byte[8192];
-                // Increased data collection window after subscription
-                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(45); 
+                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(45);
                 listenStopwatch.Start();
                 int receiveLoopIterations = 0;
 
@@ -265,7 +277,7 @@ namespace WakeAdvisor.Services
                     receiveLoopIterations++;
                     _logger.LogDebug("Receive loop iteration {Iteration}, elapsed listen time: {ElapsedMs}ms", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
 
-                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // Increased timeout for individual message
+                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, messageCts.Token);
                     
                     WebSocketReceiveResult result;
@@ -309,32 +321,50 @@ namespace WakeAdvisor.Services
 
                         try
                         {
-                            var container = JsonSerializer.Deserialize<AisMessageContainerDto>(messageJson, jsonOptions);
-                            if (container?.MessageType == "PositionReport")
+                            var envelope = JsonSerializer.Deserialize<AisStreamEnvelopeDto>(messageJson, jsonOptions);
+                            if (envelope == null)
                             {
-                                var positionReport = JsonSerializer.Deserialize<PositionReportDto>(container.Message.GetRawText(), jsonOptions);
-                                if (positionReport != null)
-                                {
-                                    double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
-                                    double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
+                                _logger.LogWarning("Failed to deserialize AIS message envelope. Raw JSON: {MessageJson}", messageJson);
+                                continue;
+                            }
 
-                                    vessels.Add(new AISVesselData
+                            if (envelope.MessageType == "PositionReport")
+                            {
+                                if (envelope.Message.TryGetProperty("PositionReport", out JsonElement positionReportElement))
+                                {
+                                    var positionReport = JsonSerializer.Deserialize<AisPositionReportDto>(positionReportElement.GetRawText(), jsonOptions);
+                                    if (positionReport != null)
                                     {
-                                        MMSI = positionReport.Mmsi.ToString(),
-                                        Name = positionReport.Name,
-                                        Latitude = positionReport.Latitude,
-                                        Longitude = positionReport.Longitude,
-                                        SOG = sogKnots,
-                                        COG = cogDegrees,
-                                        Timestamp = positionReport.Timestamp,
-                                        VesselType = MapShipTypeNumericToText(positionReport.ShipType)
-                                    });
-                                     _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}", positionReport.Mmsi);
+                                        // SOG is in 0.1 knots, COG in 0.1 degrees. Convert them.
+                                        // 1023 for SOG means not available. 3600 for COG means not available.
+                                        double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
+                                        double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
+
+                                        vessels.Add(new AISVesselData
+                                        {
+                                            MMSI = positionReport.UserId.ToString(), // From PositionReport.UserID (int)
+                                            Name = envelope.MetaData?.ShipName,      // From MetaData.ShipName (string)
+                                            Latitude = positionReport.Latitude,
+                                            Longitude = positionReport.Longitude,
+                                            SOG = sogKnots,
+                                            COG = cogDegrees,
+                                            Timestamp = positionReport.Timestamp, // This is the timestamp from the AIS message itself
+                                            VesselType = MapShipTypeNumericToText(positionReport.ShipType)
+                                        });
+                                        _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}, Name: {Name}, Lat: {Lat}, Lon: {Lon}, SOG: {Sog}kn, COG: {Cog}deg, Type: {ShipTypeNum}, Timestamp: {Ts}", 
+                                            positionReport.UserId, envelope.MetaData?.ShipName ?? "N/A", positionReport.Latitude, positionReport.Longitude, sogKnots, cogDegrees, positionReport.ShipType, positionReport.Timestamp);
+                                    }
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("'PositionReport' property missing in Message object for MessageType 'PositionReport'. Raw Message part: {MessageJson}", envelope.Message.GetRawText());
                                 }
                             }
-                            // else: Log other message types if interested
-                            // else if (container != null) { _logger.LogDebug("Received other message type: {MessageType}", container.MessageType); }
-
+                            else
+                            {
+                                _logger.LogInformation("Received AIS message of type: {MessageType}. MetaData MMSI: {MetaMmsi}, MetaData ShipName: {MetaShipName}. Raw content: {MessageJson}", 
+                                    envelope.MessageType, envelope.MetaData?.Mmsi ?? "N/A", envelope.MetaData?.ShipName ?? "N/A", messageJson);
+                            }
                         }
                         catch (JsonException jsonEx)
                         {
