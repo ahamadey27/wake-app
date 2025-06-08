@@ -10,6 +10,7 @@ using System.IO;
 using System.Text.Json.Serialization;
 using System.Threading; // Added for CancellationToken
 using System.Threading.Tasks; // Added for Task
+using System.Diagnostics; // For Stopwatch
 
 namespace WakeAdvisor.Services
 {
@@ -115,7 +116,7 @@ namespace WakeAdvisor.Services
         private const double SouthboundMin = 160.0;
         private const double SouthboundMax = 220.0;
 
-        public FreighterService(IConfiguration configuration, ILogger<FreighterService> logger /*, HttpClient httpClient*/)
+        public FreighterService(IConfiguration configuration, ILogger<FreighterService> logger)
         {
             // _httpClient = httpClient;
             _configuration = configuration;
@@ -142,7 +143,9 @@ namespace WakeAdvisor.Services
             {
                 // Only consider freighter/cargo types (adjust as needed for your AIS data)
                 if (string.IsNullOrEmpty(vessel.VesselType) ||
-                    !(vessel.VesselType.ToLower().Contains("freighter") || vessel.VesselType.ToLower().Contains("cargo")))
+                    !(vessel.VesselType.Equals("Cargo", StringComparison.OrdinalIgnoreCase) ||
+                      vessel.VesselType.Equals("Tanker", StringComparison.OrdinalIgnoreCase) ||
+                      vessel.VesselType.ToLower().Contains("freighter"))) // Keep freighter for broader custom types
                     continue;
 
                 // Vessel must be north of Kingston Point
@@ -167,7 +170,7 @@ namespace WakeAdvisor.Services
                 // Only include vessels with ETA between 15 and 50 minutes
                 if (etaMinutes < 15 || etaMinutes > 50)
                     continue;
-
+                
                 // Add to results
                 filtered.Add(new FreighterInfo
                 {
@@ -175,7 +178,7 @@ namespace WakeAdvisor.Services
                     MMSI = vessel.MMSI,
                     CurrentSOG = vessel.SOG,
                     DistanceToKingstonNM = distanceNM,
-                    ETAAtKingston = vessel.Timestamp.AddMinutes(etaMinutes)
+                    ETAAtKingston = vessel.Timestamp.AddMinutes(etaMinutes) // Assuming vessel.Timestamp is UTC
                 });
             }
             return filtered;
@@ -231,15 +234,19 @@ namespace WakeAdvisor.Services
             {
                 ApiKey = apiKey,
                 BoundingBoxes = boundingBoxes
+                // Consider adding: FilterMessageTypes = new List<string> { "PositionReport" }
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, jsonOptions);
+            _logger.LogInformation("AIS Stream Subscription JSON: {SubscriptionJson}", subscriptionJson);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)); // Listen for 20 seconds then timeout
+            // Increased overall timeout and data collection window
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout for the operation
             using var client = new ClientWebSocket();
+            Stopwatch listenStopwatch = new Stopwatch();
 
             try
             {
-                _logger.LogInformation("Connecting to AIS Stream API...");
+                _logger.LogInformation("Connecting to AIS Stream API (wss://stream.aisstream.io/v0/stream)...");
                 await client.ConnectAsync(new Uri("wss://stream.aisstream.io/v0/stream"), cts.Token);
                 _logger.LogInformation("Connected. Sending subscription message.");
 
@@ -247,15 +254,18 @@ namespace WakeAdvisor.Services
                 await client.SendAsync(new ArraySegment<byte>(sendBuffer), WebSocketMessageType.Text, true, cts.Token);
                 _logger.LogInformation("Subscription message sent. Listening for data...");
 
-                var receiveBuffer = new byte[8192]; // 8KB buffer
-                
-                // Listen for a certain period or until a number of messages are received.
-                // For this example, we'll use the CancellationTokenSource's timeout.
-                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(15); // Collect data for 15 seconds after subscription
+                var receiveBuffer = new byte[8192];
+                // Increased data collection window after subscription
+                var dataCollectionEndTime = DateTime.UtcNow.AddSeconds(45); 
+                listenStopwatch.Start();
+                int receiveLoopIterations = 0;
 
                 while (client.State == WebSocketState.Open && DateTime.UtcNow < dataCollectionEndTime && !cts.Token.IsCancellationRequested)
                 {
-                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // Timeout for individual message
+                    receiveLoopIterations++;
+                    _logger.LogDebug("Receive loop iteration {Iteration}, elapsed listen time: {ElapsedMs}ms", receiveLoopIterations, listenStopwatch.ElapsedMilliseconds);
+
+                    using var messageCts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // Increased timeout for individual message
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, messageCts.Token);
                     
                     WebSocketReceiveResult result;
@@ -266,24 +276,36 @@ namespace WakeAdvisor.Services
                         result = await client.ReceiveAsync(segment, linkedCts.Token);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            _logger.LogWarning("AIS Stream API closed the connection.");
-                            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closing", CancellationToken.None);
+                            _logger.LogWarning("AIS Stream API closed the connection. Status: {CloseStatus}, Description: {StatusDescription}", result.CloseStatus, result.CloseStatusDescription);
+                            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledging close", CancellationToken.None);
+                            listenStopwatch.Stop();
                             return vessels;
                         }
                         ms.Write(segment.Array!, segment.Offset, result.Count);
                     } while (!result.EndOfMessage && !linkedCts.Token.IsCancellationRequested);
 
-                    if (linkedCts.Token.IsCancellationRequested && !cts.Token.IsCancellationRequested)
+                    if (linkedCts.Token.IsCancellationRequested && !cts.Token.IsCancellationRequested && !messageCts.Token.IsCancellationRequested)
                     {
-                        _logger.LogWarning("Timeout receiving a single WebSocket message.");
-                        continue; // Try to receive next message if overall timeout not reached
+                        // This case should ideally not happen if linkedCts is only cancelled by cts or messageCts
+                         _logger.LogWarning("LinkedCts cancelled without main CTS or message CTS being the primary cause.");
+                    }
+                    else if (messageCts.Token.IsCancellationRequested)
+                    {
+                        _logger.LogWarning("Timeout receiving a single WebSocket message chunk after {ElapsedMs}ms in this attempt.", listenStopwatch.ElapsedMilliseconds);
+                        // Continue to next iteration of the outer while loop to try receiving again if overall time permits
+                        continue;
+                    }
+                     else if (cts.Token.IsCancellationRequested)
+                    {
+                        _logger.LogInformation("Overall cancellation token triggered during receive.");
+                        break; // Exit while loop
                     }
                     
                     ms.Seek(0, SeekOrigin.Begin);
                     if (ms.Length > 0)
                     {
                         var messageJson = Encoding.UTF8.GetString(ms.ToArray());
-                        _logger.LogDebug("Received AIS message: {MessageJson}", messageJson);
+                        _logger.LogDebug("Received AIS message (Length: {Length}): {MessageJson}", ms.Length, messageJson);
 
                         try
                         {
@@ -293,40 +315,55 @@ namespace WakeAdvisor.Services
                                 var positionReport = JsonSerializer.Deserialize<PositionReportDto>(container.Message.GetRawText(), jsonOptions);
                                 if (positionReport != null)
                                 {
-                                    // AIS SOG is in 0.1 knots, COG in 0.1 degrees. Convert them.
-                                    // 1023 for SOG means not available. 3600 for COG means not available.
                                     double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
                                     double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
 
                                     vessels.Add(new AISVesselData
                                     {
                                         MMSI = positionReport.Mmsi.ToString(),
-                                        Name = positionReport.Name, // May be null
+                                        Name = positionReport.Name,
                                         Latitude = positionReport.Latitude,
                                         Longitude = positionReport.Longitude,
                                         SOG = sogKnots,
                                         COG = cogDegrees,
-                                        Timestamp = positionReport.Timestamp, // Assuming this is already UTC
+                                        Timestamp = positionReport.Timestamp,
                                         VesselType = MapShipTypeNumericToText(positionReport.ShipType)
                                     });
+                                     _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}", positionReport.Mmsi);
                                 }
                             }
-                            // else: Handle other message types if needed (e.g., ShipStaticData for names)
+                            // else: Log other message types if interested
+                            // else if (container != null) { _logger.LogDebug("Received other message type: {MessageType}", container.MessageType); }
+
                         }
                         catch (JsonException jsonEx)
                         {
                             _logger.LogError(jsonEx, "Error deserializing AIS message: {MessageJson}", messageJson);
                         }
                     }
+                    else if (result.MessageType != WebSocketMessageType.Close) // No data received, but not a close message
+                    {
+                        _logger.LogDebug("Received empty message or EndOfMessage without data. MessageType: {MessageType}", result.MessageType);
+                    }
                 }
+                 listenStopwatch.Stop();
+                _logger.LogInformation("Finished listening for AIS data after {ElapsedMs}ms. Loop iterations: {Iterations}", listenStopwatch.ElapsedMilliseconds, receiveLoopIterations);
+
             }
             catch (WebSocketException wsEx)
             {
                 _logger.LogError(wsEx, "WebSocket error while communicating with AIS Stream API.");
             }
-            catch (OperationCanceledException) // Catches CancellationTokenSource timeout
+            catch (OperationCanceledException) 
             {
-                _logger.LogInformation("AIS data collection period ended or task was cancelled.");
+                if (cts.Token.IsCancellationRequested)
+                {
+                    _logger.LogInformation("AIS data collection task was cancelled due to overall timeout ({TotalSeconds}s).", cts.Token.CanBeCanceled ? TimeSpan.FromSeconds(60).TotalSeconds : 0);
+                }
+                else
+                {
+                     _logger.LogInformation("AIS data collection task was cancelled (not by overall timeout).");
+                }
             }
             catch (Exception ex)
             {
@@ -336,18 +373,18 @@ namespace WakeAdvisor.Services
             {
                 if (client.State == WebSocketState.Open || client.State == WebSocketState.CloseReceived)
                 {
+                    _logger.LogInformation("Closing AIS Stream connection.");
                     await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing connection", CancellationToken.None);
                 }
-                _logger.LogInformation("AIS Stream connection closed. Collected {Count} vessels.", vessels.Count);
+                _logger.LogInformation("AIS Stream connection process finished. Collected {Count} unique vessels.", vessels.Count);
             }
             
-            // Deduplicate vessels by MMSI, keeping the latest report
             return vessels
                 .GroupBy(v => v.MMSI)
                 .Select(g => g.OrderByDescending(v => v.Timestamp).First())
                 .ToList();
         }
-
+        
         // Utility: Calculate distance (nautical miles) between two points (Haversine formula)
         public static double CalculateDistanceNM(GeoPoint a, GeoPoint b)
         {
