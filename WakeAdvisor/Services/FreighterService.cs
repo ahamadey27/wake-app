@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using System.IO; // Added for StreamReader
+using System.Text.Json.Serialization; // Added for JsonPropertyName
 
 namespace WakeAdvisor.Services
 {
@@ -36,6 +37,42 @@ namespace WakeAdvisor.Services
         public double CurrentSOG { get; set; }
         public DateTime ETAAtKingston { get; set; }
         public double DistanceToKingstonNM { get; set; } // Nautical miles
+    }
+
+    // DTO for parsing messages from AIS Stream
+    public class AisStreamMessageDto
+    {
+        [JsonPropertyName("mmsi")]
+        public int Mmsi { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("latitude")]
+        public double Latitude { get; set; }
+
+        [JsonPropertyName("longitude")]
+        public double Longitude { get; set; }
+
+        [JsonPropertyName("sog")] // Speed over ground in knots
+        public double Sog { get; set; }
+
+        [JsonPropertyName("cog")] // Course over ground in degrees
+        public double Cog { get; set; }
+
+        [JsonPropertyName("true_heading")] // AIS HEADING: 0-359 degrees, 511 = not available
+        public int? TrueHeading { get; set; }
+
+        [JsonPropertyName("ship_type")] // AIS numeric ship type
+        public int? ShipTypeNumeric { get; set; }
+        
+        // In a real scenario, AIS Stream might provide a textual ship type directly,
+        // or you might subscribe to a stream that enriches data this way.
+        // Example: [JsonPropertyName("vessel_type_text")]
+        // public string VesselTypeText { get; set; }
+
+        [JsonPropertyName("timestamp")] // Or "time_utc", "ts", etc. - adjust to actual field name
+        public DateTime Timestamp { get; set; }
     }
 
     public class FreighterService
@@ -121,45 +158,101 @@ namespace WakeAdvisor.Services
             return new List<FreighterInfo>();
         }
 
-        // Fetches AIS vessel data from the API
+        // Helper method to map AIS numeric ship type to a textual description
+        private string MapShipTypeNumericToText(int? numericType)
+        {
+            if (!numericType.HasValue) return "Unknown";
+            int type = numericType.Value;
+
+            // Based on common AIS ship type categorizations
+            // See https://www.navcen.uscg.gov/ais-messages (e.g., Type 5, field 10)
+            if (type >= 70 && type <= 79) return "Cargo";       // Cargo ships
+            if (type >= 80 && type <= 89) return "Tanker";      // Tankers (often broadly considered freighters)
+            if (type == 30) return "Fishing";
+            if (type >= 60 && type <= 69) return "Passenger";
+            // Add more specific mappings as needed for your application's logic
+            // For example, you might want to differentiate various cargo types if the numeric code allows.
+            return $"Type {type}"; // Default for unmapped types
+        }
+
+        // Fetches AIS vessel data from the AIS Stream API
         private async Task<List<AISVesselData>> GetAISVesselsAsync(DateTime selectedDate)
         {
             var apiKey = _configuration["AISStreamApiKey"];
-            // AISStream API endpoint for real-time data around a bounding box
             // Bounding box for Kingston, NY area (adjust as needed)
             // Format: BBOX = minLongitude,minLatitude,maxLongitude,maxLatitude
             var boundingBox = "-74.05,41.90,-73.85,42.00"; // Example, adjust as needed
             var requestUrl = $"https://stream.aisstream.io/v0/stream?bbox={boundingBox}";
 
+            // AISStream might require API key in URL or as a Bearer token.
+            // This implementation uses Bearer token as per previous setup.
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            
+            // If API key is needed in query: requestUrl += $"&apikey={apiKey}";
+
+            var vessels = new List<AISVesselData>();
+            var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
             try
             {
-                var response = await _httpClient.GetAsync(requestUrl);
+                // HttpCompletionOption.ResponseHeadersRead is important for processing streams
+                // as it allows you to start processing the content as it arrives.
+                using var response = await _httpClient.GetAsync(requestUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode(); // Throw on error code.
 
-                var jsonResponse = await response.Content.ReadAsStringAsync();
-                // Note: AISStream provides data as a stream of JSON objects, not a single array.
-                // You'll need to handle this streaming nature. For simplicity, this example
-                // assumes a way to get a list of vessels, which might require a different endpoint
-                // or a library that handles the stream.
-                // This is a placeholder for actual stream parsing logic.
-                // You might need to use a library like System.Reactive or manually process the stream.
+                using var responseStream = await response.Content.ReadAsStreamAsync();
+                using var reader = new StreamReader(responseStream);
 
-                // Placeholder: Deserialize the JSON. This will need to be adapted based on the actual
-                // structure of the AISStream response and how you handle the stream.
-                // If the API returns a stream of individual JSON objects, you'll need to parse them one by one.
-                // For this example, let's assume a simplified scenario where you get a list.
-                // You will likely need to adjust the AISVesselData class to match the API's fields.
-                var vessels = JsonSerializer.Deserialize<List<AISVesselData>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                return vessels ?? new List<AISVesselData>();
+                string? line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    try
+                    {
+                        // Assuming each line is a self-contained JSON object from AIS Stream.
+                        // The AisStreamMessageDto needs to accurately reflect the structure of these objects.
+                        var aisMessage = JsonSerializer.Deserialize<AisStreamMessageDto>(line, jsonOptions);
+
+                        if (aisMessage != null)
+                        {
+                            // Map DTO to AISVesselData
+                            vessels.Add(new AISVesselData
+                            {
+                                MMSI = aisMessage.Mmsi.ToString(),
+                                Name = aisMessage.Name, // Can be null if not provided in the message
+                                // Use mapped ship type. The filter in GetSouthboundFreighterInfoAsync expects "freighter" or "cargo".
+                                VesselType = MapShipTypeNumericToText(aisMessage.ShipTypeNumeric),
+                                Latitude = aisMessage.Latitude,
+                                Longitude = aisMessage.Longitude,
+                                SOG = aisMessage.Sog,
+                                // Prefer TrueHeading if available and valid, otherwise use COG.
+                                // AIS TrueHeading 511 means "not available".
+                                COG = (aisMessage.TrueHeading.HasValue && aisMessage.TrueHeading.Value != 511)
+                                      ? aisMessage.TrueHeading.Value
+                                      : aisMessage.Cog,
+                                Timestamp = aisMessage.Timestamp // Ensure this is correctly parsed (e.g., as UTC)
+                            });
+                        }
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        // Log error for a single malformed line, but attempt to continue with the stream.
+                        // In a production app, use ILogger.
+                        Console.WriteLine($"Error parsing AIS data line: {jsonEx.Message}. Line: '{line}'");
+                    }
+                }
             }
             catch (HttpRequestException e)
             {
-                // Log error (e.g., using ILogger)
-                Console.WriteLine($"Request error: {e.Message}");
-                return new List<AISVesselData>(); // Return empty list on error
+                // Log request error (e.g., using ILogger)
+                Console.WriteLine($"AIS API Request error: {e.Message}");
+                // Depending on requirements, you might rethrow, or return empty/partial list.
             }
+            // Note: A true real-time stream from AISStream might be continuous.
+            // This implementation assumes the stream will eventually end (e.g., server closes it after sending a burst of data,
+            // or connection is dropped). For a web request context, this is a common pattern.
+            // If it's a long-lived persistent stream, a different architecture (e.g., background service) would be needed.
+            return vessels;
         }
 
         // Utility: Calculate distance (nautical miles) between two points (Haversine formula)
