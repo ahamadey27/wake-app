@@ -251,7 +251,7 @@ namespace WakeAdvisor.Services
         [JsonPropertyName("UserID")] // MMSI
         public int UserId { get; set; }
 
-        [JsonPropertyName("ShipType")]
+        [JsonPropertyName("Type")] // Corrected from "ShipType" to "Type"
         public int? ShipType { get; set; }
 
         [JsonPropertyName("Name")]
