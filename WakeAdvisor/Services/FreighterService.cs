@@ -244,6 +244,27 @@ namespace WakeAdvisor.Services
         public int? Timestamp { get; set; } // Changed from DateTime to int?
     }
 
+    // DTO for AIS Ship Static Data (e.g., from AIS Message Type 5 or 24)
+    // Assuming MessageType "ShipStaticData" and fields "UserID", "ShipType", "Name"
+    public class AisShipStaticDataDto
+    {
+        [JsonPropertyName("UserID")] // MMSI
+        public int UserId { get; set; }
+
+        [JsonPropertyName("ShipType")]
+        public int? ShipType { get; set; }
+
+        [JsonPropertyName("Name")]
+        public string? Name { get; set; }
+
+        // Other potential static fields if needed later:
+        // [JsonPropertyName("CallSign")]
+        // public string? CallSign { get; set; }
+        // [JsonPropertyName("Imo")]
+        // public int? Imo { get; set; }
+        // Dimensions, etc.
+    }
+
 
     public class FreighterService
     {
@@ -361,16 +382,17 @@ namespace WakeAdvisor.Services
             }
 
             var vessels = new List<AISVesselData>();
+            var staticDataCache = new Dictionary<int, (int? shipType, string? shipName)>(); // Cache for static data
             var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
                 ApiKey = _configuration["AISStreamApiKey"],
-                BoundingBoxes = [[[30, -20], [70, 20]]], // AIS Stream example bounding box for testing PositionReport
-                FilterMessageTypes = ["PositionReport"] // Filter specifically for PositionReport
+                BoundingBoxes = [[[30, -20], [70, 20]]], // AIS Stream example bounding box for testing
+                FilterMessageTypes = ["PositionReport", "ShipStaticData"] // Added "ShipStaticData"
             };
-            var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }); // Ensure camelCase for API
-            _logger.LogInformation("AIS Stream Subscription JSON (Test Box, PositionReport Filter): {SubscriptionJson}", subscriptionJson);
+            var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            _logger.LogInformation("AIS Stream Subscription JSON (Test Box, PositionReport & ShipStaticData Filter): {SubscriptionJson}", subscriptionJson);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout
             using var client = new ClientWebSocket();
@@ -458,42 +480,88 @@ namespace WakeAdvisor.Services
                                         double sogKnots = (positionReport.Sog.HasValue && positionReport.Sog.Value < 1023) ? positionReport.Sog.Value / 10.0 : 0.0;
                                         double cogDegrees = (positionReport.Cog.HasValue && positionReport.Cog.Value < 3600) ? positionReport.Cog.Value / 10.0 : 0.0;
 
-                                        DateTime finalTimestamp = envelope.MetaData?.TimeUtc ?? DateTime.UtcNow; // Default to MetaData.TimeUtc or current UTC time
+                                        DateTime finalTimestamp = envelope.MetaData?.TimeUtc ?? DateTime.UtcNow; 
                                         if (positionReport.Timestamp.HasValue && positionReport.Timestamp.Value >= 0 && positionReport.Timestamp.Value <= 59)
                                         {
-                                            // Adjust the seconds of the MetaData timestamp
                                             finalTimestamp = new DateTime(finalTimestamp.Year, finalTimestamp.Month, finalTimestamp.Day, 
                                                                       finalTimestamp.Hour, finalTimestamp.Minute, positionReport.Timestamp.Value, 
-                                                                      finalTimestamp.Kind == DateTimeKind.Unspecified ? DateTimeKind.Utc : finalTimestamp.Kind); // Preserve kind, default to Utc
-                                            // Preserve milliseconds from original MetaData.TimeUtc if desired, otherwise they become 0
+                                                                      finalTimestamp.Kind == DateTimeKind.Unspecified ? DateTimeKind.Utc : finalTimestamp.Kind);
                                             finalTimestamp = finalTimestamp.AddMilliseconds(envelope.MetaData?.TimeUtc.Millisecond ?? 0);
-
                                         }
                                         else
                                         {
                                             _logger.LogWarning("PositionReport.Timestamp ({PositionReportTimestamp}) is not a valid second (0-59). Using MetaData.TimeUtc ({MetaDataTimeUtc}) as is for MMSI: {MMSI}.", 
                                                 positionReport.Timestamp, envelope.MetaData?.TimeUtc, positionReport.UserId);
-                                            // finalTimestamp is already set to MetaData.TimeUtc or UtcNow
+                                        }
+
+                                        // Attempt to get ShipType and Name from cache
+                                        int? finalShipType = null; // Was positionReport.ShipType, which is always null
+                                        string? finalShipName = envelope.MetaData?.ShipName; // Default to MetaData ShipName
+                                        bool dataFromCache = false;
+
+                                        if (staticDataCache.TryGetValue(positionReport.UserId, out var cachedData))
+                                        {
+                                            if (cachedData.shipType.HasValue)
+                                            {
+                                                finalShipType = cachedData.shipType;
+                                            }
+                                            if (!string.IsNullOrEmpty(cachedData.shipName))
+                                            {
+                                                finalShipName = cachedData.shipName; // Prefer name from static data cache
+                                            }
+                                            dataFromCache = true;
                                         }
 
                                         vessels.Add(new AISVesselData
                                         {
                                             MMSI = positionReport.UserId.ToString(),
-                                            Name = envelope.MetaData?.ShipName,
+                                            Name = finalShipName,
                                             Latitude = positionReport.Latitude,
                                             Longitude = positionReport.Longitude,
                                             SOG = sogKnots,
                                             COG = cogDegrees,
                                             Timestamp = finalTimestamp, 
-                                            VesselType = MapShipTypeNumericToText(positionReport.ShipType)
+                                            VesselType = MapShipTypeNumericToText(finalShipType)
                                         });
-                                        _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}, Name: {Name}, Lat: {Lat}, Lon: {Lon}, SOG: {Sog}kn, COG: {Cog}deg, Type: {ShipTypeNum}, TS: {TsValue} (sec), Final TS: {FinalTs}", 
-                                            positionReport.UserId, envelope.MetaData?.ShipName ?? "N/A", positionReport.Latitude, positionReport.Longitude, sogKnots, cogDegrees, positionReport.ShipType, positionReport.Timestamp, finalTimestamp);
+                                        _logger.LogInformation("Processed PositionReport for MMSI: {MMSI}, Name: {Name} (MetaName: {MetaName}), Lat: {Lat}, Lon: {Lon}, SOG: {Sog}kn, COG: {Cog}deg, NumericType: {ShipTypeNum} (Cached: {IsCached}), MappedType: {MappedType}, TS: {TsValue} (sec), Final TS: {FinalTs}", 
+                                            positionReport.UserId, 
+                                            finalShipName ?? "N/A",
+                                            envelope.MetaData?.ShipName ?? "N/A",
+                                            positionReport.Latitude, positionReport.Longitude, sogKnots, cogDegrees, 
+                                            finalShipType.HasValue ? finalShipType.Value.ToString() : "(null)", 
+                                            dataFromCache,
+                                            MapShipTypeNumericToText(finalShipType),
+                                            positionReport.Timestamp, finalTimestamp);
                                     }
                                 }
                                 else
                                 {
                                     _logger.LogWarning("'PositionReport' property missing in Message object for MessageType 'PositionReport'. Raw Message part: {MessageJson}", envelope.Message.GetRawText());
+                                }
+                            }
+                            else if (envelope.MessageType == "ShipStaticData") // Handle static data messages
+                            {
+                                if (envelope.Message.TryGetProperty("ShipStaticData", out JsonElement staticDataElement))
+                                {
+                                    var staticData = JsonSerializer.Deserialize<AisShipStaticDataDto>(staticDataElement.GetRawText(), jsonOptions);
+                                    if (staticData != null)
+                                    {
+                                        // Update cache, preferring new non-null values if an entry already exists
+                                        staticDataCache.TryGetValue(staticData.UserId, out var existingData);
+                                        var newShipType = staticData.ShipType ?? existingData.shipType;
+                                        var newShipName = !string.IsNullOrEmpty(staticData.Name) ? staticData.Name : existingData.shipName;
+                                        
+                                        staticDataCache[staticData.UserId] = (newShipType, newShipName);
+                                        _logger.LogInformation("Cached/Updated static data for MMSI: {MMSI}, ShipType: {ShipType}, Name: {Name}", staticData.UserId, newShipType, newShipName);
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning("Failed to deserialize ShipStaticData content. Raw Element: {StaticDataElement}", staticDataElement.GetRawText());
+                                    }
+                                }
+                                else
+                                {
+                                     _logger.LogWarning("'ShipStaticData' property missing in Message object for MessageType 'ShipStaticData'. Raw Message part: {MessageJson}", envelope.Message.GetRawText());
                                 }
                             }
                             else
