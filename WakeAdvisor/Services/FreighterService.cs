@@ -388,9 +388,10 @@ namespace WakeAdvisor.Services
 
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
-                ApiKey = apiKey,
-                BoundingBoxes = boundingBoxes,
-                FilterMessageTypes = new List<string> { "PositionReport" } // Re-enabled to filter for PositionReport
+                ApiKey = _configuration["AISStreamApiKey"],
+                BoundingBoxes = [[[41.4275, -74.4639], [42.4275, -73.4639]]], // Kingston, NY area
+                // BoundingBoxes = [[[30, -20], [70, 20]]], // AIS Stream example bounding box for testing
+                FilterMessageTypes = ["PositionReport"]
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }); // Ensure camelCase for API
             _logger.LogInformation("AIS Stream Subscription JSON (filtering for PositionReport): {SubscriptionJson}", subscriptionJson);
