@@ -363,18 +363,14 @@ namespace WakeAdvisor.Services
             var vessels = new List<AISVesselData>();
             var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             
-            // Kingston Bounding Box is defined directly in the subscription message below.
-            // Approx. +/- 0.5 degrees from Kingston Point (41.9275 N, -73.9639 W)
-            // Lat: 41.4275 to 42.4275, Lon: -74.4639 to -73.4639
-
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
                 ApiKey = _configuration["AISStreamApiKey"],
-                BoundingBoxes = [[[41.4275, -74.4639], [42.4275, -73.4639]]], // Kingston, NY area
-                FilterMessageTypes = null // Temporarily subscribe to all message types for Kingston box
+                BoundingBoxes = [[[30, -20], [70, 20]]], // AIS Stream example bounding box for testing PositionReport
+                FilterMessageTypes = ["PositionReport"] // Filter specifically for PositionReport
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }); // Ensure camelCase for API
-            _logger.LogInformation("AIS Stream Subscription JSON (Kingston Box, All Message Types): {SubscriptionJson}", subscriptionJson);
+            _logger.LogInformation("AIS Stream Subscription JSON (Test Box, PositionReport Filter): {SubscriptionJson}", subscriptionJson);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout
             using var client = new ClientWebSocket();
