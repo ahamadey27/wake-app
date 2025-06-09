@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WakeAdvisor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+72c9c7bedb9f7cf889e20012e0e4f12f66780fd4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e7ce0548b4b09586e9bcf651385d40af7fe9d00e")]
 [assembly: System.Reflection.AssemblyProductAttribute("WakeAdvisor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WakeAdvisor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
