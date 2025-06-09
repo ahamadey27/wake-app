@@ -356,19 +356,38 @@ namespace WakeAdvisor.Services
             if (!numericType.HasValue) return "Unknown";
             int type = numericType.Value;
 
-            // Based on common AIS ship type categorizations
-            // See https://www.navcen.uscg.gov/ais-messages (e.g., Type 5, field 10)
-            // AIS Standard Ship Types:
-            // 70-79: Cargo ships
-            // 80-89: Tankers
-            // Consider others if necessary (e.g., 60-69 Passenger, 30 Fishing)
+            // Based on https://www.navcen.uscg.gov/ais-ship-types
+            // and common AIS categorizations.
             if (type >= 70 && type <= 79) return "Cargo";
             if (type >= 80 && type <= 89) return "Tanker";
-            // Add more specific mappings if needed
-            // if (type == 0) return "Not available or no ship"; // Default value
-            // if (type == 30) return "Fishing";
-            // if (type >= 60 && type <= 69) return "Passenger";
-            return $"Type {type}"; // Default for unmapped/other types
+            
+            if (type == 0) return "Not available or no ship";
+            if (type >= 20 && type <= 29) return "Wing in ground (WIG)";
+            if (type == 30) return "Fishing";
+            if (type == 31) return "Towing";
+            if (type == 32) return "Towing: length > 200m or breadth > 25m";
+            if (type == 33) return "Dredging or underwater ops";
+            if (type == 34) return "Diving ops";
+            if (type == 35) return "Military ops";
+            if (type == 36) return "Sailing";
+            if (type == 37) return "Pleasure Craft";
+            // 38-39 Reserved
+            if (type >= 40 && type <= 49) return "High speed craft (HSC)";
+            if (type == 50) return "Pilot Vessel";
+            if (type == 51) return "Search and Rescue vessel";
+            if (type == 52) return "Tug";
+            if (type == 53) return "Port Tender";
+            if (type == 54) return "Anti-pollution equipment";
+            if (type == 55) return "Law Enforcement";
+            // 56-57 Spare
+            if (type == 58) return "Medical Transport";
+            if (type == 59) return "Noncombatant ship (Resolution No. 18)";
+            if (type >= 60 && type <= 69) return "Passenger";
+            // 70-79 Cargo (handled above)
+            // 80-89 Tanker (handled above)
+            if (type >= 90 && type <= 99) return "Other Type";
+
+            return $"Type {type}"; // Fallback for unmapped or reserved types
         }
 
         // Fetches AIS vessel data from the AIS Stream API using WebSockets
@@ -388,11 +407,12 @@ namespace WakeAdvisor.Services
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
                 ApiKey = _configuration["AISStreamApiKey"],
-                BoundingBoxes = [[[30, -20], [70, 20]]], // AIS Stream example bounding box for testing
-                FilterMessageTypes = ["PositionReport", "ShipStaticData"] // Added "ShipStaticData"
+                // Corrected bounding box: [[[SW_lon, SW_lat], [NE_lon, NE_lat]]]
+                BoundingBoxes = [[[ -74.4639, 41.4275], [-73.4639, 42.4275]]], // Kingston, NY bounding box
+                FilterMessageTypes = ["PositionReport", "ShipStaticData"]
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-            _logger.LogInformation("AIS Stream Subscription JSON (Test Box, PositionReport & ShipStaticData Filter): {SubscriptionJson}", subscriptionJson);
+            _logger.LogInformation("AIS Stream Subscription JSON (Kingston Box CORRECTED, PositionReport & ShipStaticData Filter): {SubscriptionJson}", subscriptionJson);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout
             using var client = new ClientWebSocket();
