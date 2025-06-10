@@ -407,8 +407,8 @@ namespace WakeAdvisor.Services
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
                 ApiKey = _configuration["AISStreamApiKey"],
-                // Wider Kingston Area bounding box
-                BoundingBoxes = [[[ -75.0, 41.0], [-73.0, 43.0]]],
+                // Wider Kingston bounding box
+                BoundingBoxes = [[[ -75.0, 41.0 ], [ -73.0, 43.0 ]]],
                 FilterMessageTypes = ["PositionReport", "ShipStaticData"]
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
