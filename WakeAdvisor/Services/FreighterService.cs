@@ -407,12 +407,12 @@ namespace WakeAdvisor.Services
             var subscriptionMessage = new AisSubscriptionMessageDto
             {
                 ApiKey = _configuration["AISStreamApiKey"],
-                // AIS Stream example bounding box
-                BoundingBoxes = [[[30, -20], [70, 20]]],
+                // Much larger bounding box around Kingston, NY
+                BoundingBoxes = [[[ -80.0, 39.0 ], [ -70.0, 45.0 ]]],
                 FilterMessageTypes = ["PositionReport", "ShipStaticData"]
             };
             var subscriptionJson = JsonSerializer.Serialize(subscriptionMessage, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-            _logger.LogInformation("AIS Stream Subscription JSON (Example Box, PositionReport & ShipStaticData Filter): {SubscriptionJson}", subscriptionJson);
+            _logger.LogInformation("AIS Stream Subscription JSON (Much Larger Kingston Box, PositionReport & ShipStaticData Filter): {SubscriptionJson}", subscriptionJson);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Overall timeout
             using var client = new ClientWebSocket();
