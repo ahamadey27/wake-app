@@ -1,0 +1,211 @@
+
+Real-Time Commercial Vessel Tracking APIs and Data Sources for the Hudson River
+
+
+Executive Summary
+
+This report addresses the challenge of identifying public or commercial Application Programming Interfaces (APIs) and data sources for real-time or near-real-time tracking of commercial freighter and tanker vessel movements within the Hudson River area of New York State, specifically including Kingston and the mid-Hudson region. The analysis reveals that direct, real-time AIS (Automatic Identification System) APIs specifically tailored for the Hudson River from public government sources are notably limited or non-existent for live vessel position data. While government entities collect real-time AIS data, their public dissemination often occurs as historical aggregates.
+Commercial AIS data providers offer global real-time AIS data with programmatic access. However, a critical observation is that their broad claims of "global coverage" do not inherently guarantee the necessary density or resolution of data for specific, narrow inland waterways like the Hudson River. Therefore, explicit verification of their inland Hudson River coverage for commercial vessels is paramount. The report highlights MarineTraffic and VesselFinder as potentially promising candidates due to indirect evidence of their presence in the Hudson River area, but emphasizes the need for direct inquiry regarding the extent and quality of their terrestrial AIS networks in the mid-Hudson region. Key recommendations underscore the necessity of direct engagement with commercial vendors and the strategic value of integrating publicly available historical data for comprehensive analytical purposes.
+
+Introduction
+
+This report aims to identify and evaluate available public APIs and data sources that offer real-time or near-real-time tracking of commercial freighter and tanker vessel movements within the Hudson River area of New York State, encompassing Kingston and the broader mid-Hudson region. A primary objective is to identify sources that support programmatic access for developers, facilitating integration into custom applications or analytical platforms.
+In the context of Automatic Identification System (AIS) data, "real-time" typically refers to data with minimal latency, often within seconds to a few minutes. "Near-real-time" implies a slightly longer delay, potentially up to 10-15 minutes. This distinction is significant because data collection methods, whether terrestrial or satellite, and subsequent processing pipelines directly influence the latency of the data. Terrestrial AIS, collected by ground stations, generally offers lower latency in well-covered coastal and inland areas, providing more immediate updates. Conversely, satellite AIS, while essential for global coverage, can exhibit higher latency, particularly in open ocean environments. However, near-shore latency for satellite data can be as low as one minute, as observed with providers like Spire Maritime.1 As explicitly requested by the user,
+aisstream.io has been excluded from this analysis due to its confirmed lack of data for the specified Hudson River area.
+
+Understanding Automatic Identification System (AIS) Data
+
+Automatic Identification System (AIS) is a fundamental maritime navigation safety device. It functions by automatically transmitting and monitoring critical information about vessels, including their location, identity, course, and speed.2 This continuous broadcast of data is crucial for preventing collisions and enhancing overall maritime situational awareness. The International Maritime Organization (IMO) mandates that large ships, including many commercial fishing vessels, broadcast their position using AIS.4
+AIS data is primarily collected through two distinct methods: terrestrial and satellite. Terrestrial AIS data is gathered by ground-based receiving stations strategically positioned along coastlines and major waterways. This method typically provides high-frequency updates and is particularly effective in busy shipping lanes and near-shore areas, offering granular detail on vessel movements.7 For global coverage, especially in vast open ocean areas beyond the reach of terrestrial stations, AIS data is collected by satellites equipped with VHF maritime receivers. Spire’s LEMUR constellation, for instance, utilizes nanosatellites to collect global radio frequency data.1 These satellite systems complement terrestrial networks, providing a broader, albeit sometimes less granular, view of vessel movements. Many commercial providers integrate both terrestrial and satellite sources to offer comprehensive coverage, aiming to balance global reach with localized detail.1
+A critical consideration for users seeking data for specific inland waterways, such as the Hudson River, is the potential disparity between a provider's advertised "global coverage" and the actual density and resolution of data available for these unique environments. While commercial AIS providers frequently promote their extensive global reach 1, this broad claim does not inherently guarantee the necessary level of detail or continuous tracking for narrow inland waterways. Satellite AIS, while contributing to global coverage, may be less effective for continuous, high-resolution tracking in areas with potential signal obstructions from terrain or buildings, or in regions with high vessel density where a robust terrestrial network is more advantageous. The observed lack of explicit confirmation for inland coverage from several commercial providers, despite their general global claims 1, suggests a potential gap between general marketing and the specific user requirement for precise
+inland vessel positioning. Therefore, for developers, it is imperative not to assume that "global coverage" automatically translates to reliable, real-time tracking in the specific inland Hudson River area. Direct verification with commercial providers regarding their terrestrial AIS infrastructure and data quality within the mid-Hudson region is a crucial next step.
+
+Government and Public Data Sources for Maritime Information
+
+Several government and public entities provide maritime data, though their offerings for real-time vessel tracking in the Hudson River vary significantly.
+
+NOAA PORTS (Physical Oceanographic Real-time System)
+
+The Hudson River Estuary Physical Oceanographic Real-time System (PORTS®) is a collaborative initiative between the National Oceanic and Atmospheric Administration (NOAA) and the New York State Department of Environmental Conservation (NYSDEC).10 Its primary objective is to deliver real-time oceanographic and meteorological observations to enhance maritime safety and inform coastal resource management.10 The system provides real-time data on water levels, wind speed, pressure, and direction, as well as air and water temperature, relative humidity, and conductivity.10
+The PORTS system offers real-time water level data covering the Hudson River from Sleepy Hollow north to Troy, New York.10 A key component of this network is the Turkey Point tide station located near Saugerties, within the mid-Hudson region, which was officially adopted into NOAA's National Water Level Observation Network.10 There are also plans to expand the network by adding a second water level station further north at the Coxsackie State boat launch and Riverside Park.10
+While NOAA PORTS provides invaluable "real-time data on coastal conditions" that aid Hudson River safety 10, it is important to note that its focus is exclusively on environmental and meteorological observations. The available information does not indicate that NOAA PORTS offers AIS or direct vessel position data. A review of NOAA's general API documentation also reveals APIs for hydrologic forecasts and NOAA fleet metadata, but not for general AIS vessel tracking.12 This highlights a critical distinction: even though the system provides "real-time maritime data," it does not fulfill the specific user requirement for real-time
+vessel movement tracking. While the data is accessible via an online tool 10, specific links for programmatic access to Hudson River PORTS data were inaccessible during the research 8, suggesting potential barriers or a lack of a direct AIS API for vessel positions.
+
+Marine Cadastre (NOAA/U.S. Coast Guard)
+
+Marine Cadastre, a joint project of NOAA and the Bureau of Ocean Energy Management (BOEM), serves as a significant repository for Automatic Identification System (AIS) data collected by the U.S. Coast Guard.2 This dataset includes crucial vessel information such as location, time, vessel type, speed, length, beam, and draft.2 The primary applications for this data are coastal management and ocean planning.3 The data covers "U.S. and international waters" 2 and is filtered to the Exclusive Economic Zone.3 The presence of NOAA AIS Vessel Transit Counts for New York State on the NYS Open Data Portal further confirms its relevance to the Hudson River region.14
+While the initial collection of AIS data by the U.S. Coast Guard is described as occurring in "real time" 2, the publicly available data through Marine Cadastre is predominantly historical. It is presented as "annual vessel transit counts" for specific past years, such as 2019, 2020, 2021, and 2022.5 The platform provides a web-based tool allowing users to download historical point data for user-defined geographies and time periods.2 However, there is no explicit mention or confirmation of a real-time AIS API for direct programmatic access in the provided information.2 A Kaggle dataset containing 2023 USCG + NOAA AIS data is available 4, but this constitutes a large downloadable file rather than a live API feed. This distinction highlights that while the U.S. Coast Guard collects AIS data in real-time, its public availability through platforms like Marine Cadastre typically involves a time lag, making it suitable for historical analysis rather than immediate live tracking. Government sources, while originating much of the AIS data, generally do not provide real-time programmatic access for broad public consumption; their data is more valuable for historical analysis, trend identification, and planning.
+
+New York State Open Data Portal
+
+The New York State Open Data Portal functions as a centralized repository for a diverse range of datasets pertinent to New York State, including those related to marine transportation. Notably, it hosts NOAA's AIS Vessel Transit Counts for several past years (2019, 2020, 2021), which offer insights into historical vessel traffic patterns.14 The portal's datasets are specifically tagged for "marine transportation" within New York State 14, and it also contains other Hudson River-specific datasets, such as the "Hudson River Shoreline Survey" 15 and "Hudson River Estuary Bathymetry" 17, underscoring its relevance to the region.
+The AIS data available through this portal consists of aggregated "Vessel Transit Counts" from previous years.14 This means it represents historical traffic patterns rather than providing real-time vessel position data. While the portal supports OGC API - Records 14, this API is designed for discovering geospatial resources and their metadata, not for streaming live data. While not fulfilling the immediate "real-time" requirement, these historical AIS transit counts are highly valuable for complementary analytical tasks. For a developer or analyst, this data is crucial for understanding baseline vessel activity, identifying historical traffic patterns, and pinpointing areas of high commercial traffic density within the Hudson River. This historical context can be leveraged to train predictive models, analyze long-term trends, or inform infrastructure planning, even in the absence of live updates. Such datasets offer a foundational understanding of typical vessel behavior in the region, which can be essential for strategic planning or developing predictive analytics solutions. The data is publicly accessible and can be exported.14
+
+Commercial AIS Data Providers with Programmatic Access
+
+Commercial providers typically offer more robust real-time AIS data solutions, often combining terrestrial and satellite networks. However, verifying their specific coverage for inland waterways like the Hudson River is crucial.
+
+VT Explorer
+
+VT Explorer provides comprehensive real-time AIS data services, accessible via API (XML/JSON) or direct TCP/UDP streams, designed to ensure minimal latency.7 The company asserts that it operates one of the largest AIS networks globally, processing thousands of messages per second from both terrestrial AIS stations and satellites.7 Their key services include:
+Vessel Positions: Providing the latest AIS position for individual vessels or entire fleets.7
+Regional Zone: Offering real-time AIS data for all vessels within a predefined geographical area or port.7
+Port Calls/Expected Port Arrivals: Delivering information on vessels visiting or expected to arrive at specific ports.7
+Vessel Particulars: Supplying detailed ship information.7
+While VT Explorer explicitly states "global coverage" derived from both terrestrial and satellite sources 7, specific information concerning their Hudson River coverage for their API was not available in the research.8 This absence means direct confirmation of the density and quality of their terrestrial AIS network within the Hudson River, particularly the mid-Hudson region and Kingston, is not ascertainable from the provided data. This situation underscores a common challenge: a provider's strong claim of "global coverage" is a characteristic feature of commercial AIS services, yet it does not automatically imply granular, reliable coverage in a specific inland waterway. Satellite data, while contributing to global reach, is often less ideal for continuous, high-resolution tracking in a river environment compared to a dense terrestrial network. Therefore, developers considering VT Explorer must directly contact their sales or technical support to obtain explicit confirmation and potentially a trial of their AIS data quality and density specifically for the Hudson River, including Kingston and the mid-Hudson region.
+Access to VT Explorer's services is paid and operates on a credit-based system.7 Credits can be purchased on a subscription basis, which offers a lower price per credit and a 1-month validity period, or on an on-demand basis, which has a higher price per credit but a 12-month validity.7 The cost per position varies depending on the data source: 1 credit for terrestrial data and 5 credits for satellite data.7 Full technical details on the API use are available on their AIS API Documentation site.7
+
+MarineTraffic
+
+MarineTraffic is a widely recognized service that provides global ship tracking intelligence primarily through AIS.18 Their API services are designed to offer streamlined access to extensive maritime data, including:
+AIS Data: Live ship tracking information for vessels transmitting AIS data.19
+Real-Time Events: Live updates on maritime activities such as port calls, bunkering operations, and ship-to-ship transfers.19
+Past Events: Access to historical vessel movements and event data for analysis and historical insights.19
+Predictive Events: Leveraging machine learning and expert analysis to provide predictions for destinations and Estimated Times of Arrival (ETAs).19
+Ships Database: Detailed vessel information, including technical specifications, ownership data, and photos.19
+While direct API documentation explicitly detailing Hudson River coverage was not found in the provided information 18, there is substantial indirect evidence suggesting coverage for the region. A vessel named "KINGSTON," though a passenger ship, was reported by MarineTraffic as "currently located in the Hudson River" 21, indicating active tracking within the river itself. Furthermore, MarineTraffic identifies the Port of New York as being situated on the "US East Coast, Hudson River".22 The listing of an AIS station in New York City (40.76°, -73.96°) also points to terrestrial receiving capabilities in the broader area.23 These observations collectively make MarineTraffic a highly promising candidate for Hudson River coverage. However, despite this strong indirect evidence, it is still advisable for the user to directly verify the
+extent and density of their real-time AIS coverage specifically for commercial freighters and tankers throughout the entire requested area, including Kingston and the mid-Hudson region, rather than solely relying on coverage for the lower Hudson or New York City port area.
+MarineTraffic API services are paid and necessitate an API key for access.24 Many detailed features on their public website require an "Upgrade to unlock".21 API documentation is accessible through the "API Services" section under a user's "My Account" area, where a hyperlinked "Documentation" option is available for each specific service.24
+
+Spire Maritime
+
+Spire Maritime offers "Standard AIS" vessel tracking data, aiming to provide an up-to-date and accurate view of global shipping activities.1 Their primary strength lies in their proprietary Low Earth Multi-Use Receiver (LEMUR) satellite constellation, which delivers global ocean coverage.1 Spire tracks over 600,000 vessels, with more than 250,000 active vessels daily, and provides static, positional, and voyage-related data.1 Data delivery options include API (GraphQL/GWS), Uniproxy, and their ShipView solution.1 They claim near real-time refresh rates near shore, averaging one minute.1
+While Spire emphasizes its "global ocean coverage" 1 and the ability to "track vessels anywhere and at any moment" 1, the research explicitly states that information regarding "Spire Global AIS API inland waterway coverage" is unavailable.1 This is a significant point of concern for tracking in the Hudson River. Although Spire combines satellite data with "other trusted data sources" 1, their marketing and core technological focus heavily lean on their satellite capabilities. This observation leads to a critical consideration: while satellite AIS excels in open ocean environments, its effectiveness for continuous, highly precise tracking in narrow, potentially obstructed inland waterways like the Hudson River can be limited when compared to a dense network of terrestrial receivers. The explicit absence of information concerning "inland waterway coverage" reinforces this potential limitation for the user's specific need. Therefore, Spire Maritime might be less optimal for granular, real-time tracking deep within the Hudson River. Direct contact with Spire is highly recommended to clarify their specific terrestrial AIS coverage and data quality for the mid-Hudson and Kingston areas.
+Spire Maritime is a paid service, as implied by calls to "Get started," "Configure your AIS data solution," and "Get a free sample or request a callback".1 API options (GraphQL/GWS) are mentioned 1, and "developer documentation" and "Maritime API documentation" are noted as available resources.1
+
+Portcast
+
+Portcast offers an "all-in-one vessel tracking API" that integrates live AIS positions, vessel schedules, and predictive Estimated Time of Arrival (ETA) and Estimated Time of Departure (ETD) capabilities.9 They support all container vessels and major Roll-on/Roll-off (RoRo) carriers, with bulk vessel tracking available upon request.9 Additional features include real-time container tracking, port congestion data, and shipping analytics.9
+Portcast claims "wide vessel coverage".9 However, the research explicitly states that information regarding "Portcast API coverage Hudson River" is unavailable and does not specify coverage for particular geographical locations like the Hudson River.9 This situation, where generic coverage claims are made without specific mention of inland waterways or the Hudson River, mirrors the challenge observed with other commercial providers. While their focus on specific vessel types (container, RoRo, bulk) aligns with the user's query, the geographical precision for the Hudson River remains unconfirmed. Therefore, similar to other commercial providers, Portcast would require direct engagement to ascertain the specifics of their real-time AIS data coverage for commercial freighters and tankers within the Hudson River, particularly the Kingston and mid-Hudson regions.
+Portcast is a paid service. Access details require direct contact ("Get in Touch") for a discovery session and tech alignment process.9 "API Documentation" is mentioned as an available resource.9
+
+VesselFinder
+
+VesselFinder is a maritime tracking application that provides real-time data on global vessel movements.26 It offers detailed insights, live vessel positions (including current positions, speeds, courses, and destinations), comprehensive vessel information, historical data and playback features, and customizable alerts.26 They offer a "Vessel Positions API" that returns the latest AIS position and voyage data 27, as well as a "Container Tracking API".26
+For Hudson River coverage, VesselFinder lists the Port of New York at 40.7N, 74.01W, with current ships in port and expected arrivals 28, confirming coverage for the lower Hudson. They also mention "AIS transponders worldwide" and the ability to view "AIS station coverage".26 An AIS station in New York (40.76°, -73.96°) is specifically noted.23 This indicates a terrestrial presence in the broader New York area that likely extends into the Hudson.
+VesselFinder operates on a "Pay-per-Use" credit-based system.27 Credits can be purchased on a subscription basis (lower price, 1-month validity) or on-demand (higher price, 12-month validity).27 Pricing varies by data source: 1 credit for terrestrial data and 5 for satellite data.27 A free version is available, but it comes with significant limitations, such as only 1 day of track history and tracking for a maximum of 10 ships.26 This observation is important: while the free tier might initially seem attractive, its severe limitations make it unsuitable for any serious commercial or real-time tracking application involving multiple vessels or continuous monitoring. The "Pay-per-Use" credit system indicates that any meaningful utilization for robust, real-time commercial vessel tracking for the Hudson River will quickly transition to a paid model. Therefore, the free tier is not a viable long-term solution for the user's stated requirements. "Vessel Positions API" documentation is mentioned as available.27 While a general API link was inaccessible 29, specific API documentation is referenced within the detailed service descriptions.26
+
+Summary of Findings: Real-Time AIS Data Sources for Hudson River
+
+The following table summarizes the findings for public and commercial data sources relevant to tracking commercial freighter and tanker vessel movements in the Hudson River area.
+API/Service Name
+Brief Description & Capabilities
+Hudson River/Kingston Coverage
+Real-Time/Near-Real-Time
+Access Requirements
+API Documentation/Data Portal Link
+Government/Public Sources
+
+
+
+
+
+
+
+
+
+
+NOAA PORTS
+Provides real-time oceanographic and meteorological data (water levels, wind, temp). Focuses on maritime safety.
+Yes (Sleepy Hollow to Troy, incl. Turkey Point/Saugerties) 10
+Yes (for environmental data) 10
+Free (online tool) 10
+tidesandcurrents.noaa.gov/ports/index.html?port=hr 11 (Note: Direct API for vessel positions not found/inaccessible 8)
+Marine Cadastre (NOAA/USCG)
+Provides historical AIS vessel traffic data (location, type, speed, etc.) for coastal management.
+Yes (U.S. waters, incl. NYS; historical transit counts) 2
+No (primarily historical/aggregated data for public access) 5
+Free (public download) 2
+hub.marinecadastre.gov/pages/vesseltraffic 2
+NYS Open Data Portal
+Repository for NYS datasets, including historical NOAA AIS Vessel Transit Counts.
+Yes (NYS waterways, incl. Hudson River; historical transit counts) 14
+No (historical/aggregated data) 14
+Free (public access, exportable) 14
+opdgig.dos.ny.gov/search?collection=appAndMap&tags=marine%2520transportation 14
+Commercial Providers
+
+
+
+
+
+
+
+
+
+
+VT Explorer
+Real-time AIS data via API (XML/JSON) or TCP/UDP streams. Global coverage from terrestrial & satellite.
+Needs Verification (Explicit Hudson River coverage not confirmed) 8
+Yes (real-time/minimal latency) 7
+Paid (credit-based: subscription/on-demand) 7
+vtexplorer.com/ais-data-en/ 7
+MarineTraffic
+Global ship tracking intelligence with live AIS, real-time/past/predictive events, ship database.
+Partial/Needs Verification (Indirect evidence of Hudson River presence, Port of NY on Hudson, Kingston vessel tracked in Hudson, NY AIS station) 21
+Yes (live AIS, real-time events) 19
+Paid (API key, "Upgrade to unlock" features) 24
+Documentation via "My Account" API Services 24
+Spire Maritime
+Global AIS vessel tracking via proprietary satellite constellation. Static, positional, voyage data.
+Needs Verification (Explicit inland waterway coverage unavailable; satellite focus raises concerns for river precision) 1
+Yes (near real-time, avg. 1 min near shore) 1
+Paid (implied) 1
+spire.com/maritime/solutions/standard-ais/ 1
+Portcast
+All-in-one vessel tracking API: live AIS, schedules, predictive ETA/ETD. Supports container, RoRo, bulk vessels.
+Needs Verification (Explicit Hudson River coverage not specified) 9
+Yes (live AIS, real-time tracking) 9
+Paid (requires direct contact for access) 9
+portcast.io/ocean-vessel-tracking-api 9
+VesselFinder
+Real-time global vessel tracking, detailed vessel info, historical data, API access.
+Partial/Needs Verification (Port of NY on Hudson, NY AIS station; free tier limited) 23
+Yes (real-time vessel positions) 26
+Paid (credit-based: subscription/on-demand); limited free version 26
+vesselfinder.com/vessel-positions-api 27
+
+
+Recommendations for Developers
+
+For developers seeking real-time or near-real-time tracking of commercial freighter and tanker vessel movements in the Hudson River, a strategic approach combining direct vendor engagement and multi-source data integration is advisable.
+First and foremost, for all commercial AIS data providers (VT Explorer, MarineTraffic, Spire Maritime, Portcast, VesselFinder), the most critical next step is to directly contact their sales or technical support teams. It is imperative to specifically inquire about the density and reliability of their terrestrial AIS station network within the Hudson River, particularly the mid-Hudson region and Kingston, NY. Generic "global" or "coastal" coverage claims, while indicative of overall reach, are insufficient for the precise inland requirements. It is recommended to request specific coverage maps or sample data for this area if possible, as satellite AIS may have limitations in providing continuous, high-resolution tracking in such confined riverine environments.
+Secondly, developers should carefully evaluate the various cost models and inquire about trial opportunities offered by commercial services. These providers operate on diverse paid models, including subscription-based and credit-based systems. A thorough estimation of expected data volume and frequency of access is essential to determine the most cost-effective solution. Inquiring about trial periods or free data samples is a prudent step to assess the actual data quality and latency for the Hudson River before committing to a full subscription. This direct assessment will provide invaluable insights into the practical utility of the data for the specific use case.
+Thirdly, when engaging with providers or during trials, it is important to specifically inquire about the typical data latency and refresh rate for commercial vessels within the Hudson River. While commercial providers generally advertise "real-time" or "near-real-time" capabilities, the actual data latency for inland waterways can vary based on their specific terrestrial infrastructure in the region. Understanding these refresh rates is vital for applications requiring immediate situational awareness.
+Finally, a strategic combination of data sources is recommended to build a truly comprehensive and robust vessel tracking and analysis system. Developers should leverage commercial APIs for immediate, real-time vessel position data of commercial freighters and tankers. This live data can be complemented with publicly available historical AIS data from sources like Marine Cadastre 2 and the New York State Open Data Portal.14 This historical information is invaluable for long-term trend analysis, understanding typical traffic patterns, identifying historical choke points, or training predictive models for future vessel movements, providing a foundational understanding of vessel behavior. Additionally, integrating real-time environmental data from NOAA PORTS 10 for water levels, currents, and meteorological conditions is crucial. While NOAA PORTS does not provide AIS data, its environmental observations are essential for enhancing maritime safety, optimizing vessel operations, and providing a comprehensive situational awareness picture for navigation within the Hudson River.
+
+Conclusion
+
+Obtaining real-time or near-real-time AIS data for commercial freighter and tanker vessel movements specifically within the Hudson River area presents a nuanced challenge. While government sources such as NOAA PORTS and Marine Cadastre provide valuable maritime data, their real-time offerings are primarily focused on environmental conditions or consist of historical AIS aggregates, rather than live vessel positions suitable for programmatic access.
+The most significant hurdle lies with commercial AIS data providers. Although they offer global real-time AIS APIs, their marketing often emphasizes broad coverage. The critical step for any interested party will be to directly verify the granularity, density, and reliability of their terrestrial AIS network specifically within the Hudson River, extending to Kingston and the mid-Hudson region. This is particularly important because satellite AIS, while providing global reach, may have inherent limitations in providing the continuous, high-resolution tracking required in confined riverine environments.
+Success in meeting this requirement will most likely involve investing in a paid commercial AIS solution. This investment should be preceded by thorough due diligence, including direct communication with vendors to confirm their precise inland waterway coverage and potentially conducting trials with sample data. By combining this live commercial data with publicly available historical datasets and real-time environmental data, a truly comprehensive and robust vessel tracking and analysis system for the Hudson River can be achieved, enabling enhanced maritime safety, operational efficiency, and informed decision-making.
+Works cited
+Standard AIS - AIS Data API - Spire Global, accessed June 17, 2025, https://spire.com/maritime/solutions/standard-ais/
+Vessel Traffic - Marine Cadastre | Marine Cadastre Hub, accessed June 17, 2025, https://hub.marinecadastre.gov/pages/vesseltraffic
+Automatic Identification System (AIS) in US Offshore Waters Vessel Traffic Data - Catalog, accessed June 17, 2025, https://catalog.data.gov/dataset/automatic-identification-system-ais-in-us-offshore-waters-vessel-traffic-data1
+2023 US Coast Guard + NOAA AIS Dataset - Kaggle, accessed June 17, 2025, https://www.kaggle.com/datasets/bwandowando/2013-noaa-ais-dataset
+AIS Vessel Transit Counts 2022 | Marine Cadastre Hub, accessed June 17, 2025, https://hub.marinecadastre.gov/maps/noaa::ais-vessel-transit-counts-2022/about
+AIS Vessel Transit Counts 2021 | Marine Cadastre Hub, accessed June 17, 2025, https://hub.marinecadastre.gov/maps/noaa::ais-vessel-transit-counts-2021/about
+AIS Data API | VT Explorer, accessed June 17, 2025, https://www.vtexplorer.com/ais-data-en/
+accessed December 31, 1969, https://tidesandcurrents.noaa.gov/ports.html?id=8518750
+Ship Tracking API With Live AIS Position, Vessel Schedules, ETA ..., accessed June 17, 2025, https://www.portcast.io/ocean-vessel-tracking-api
+Real-Time Data on Coastal Conditions Aids Hudson River Safety - neiwpcc, accessed June 17, 2025, https://neiwpcc.org/2025/06/11/real-time-data-on-coastal-conditions-aids-hudson-river-safety/
+Hudson River Estuary PORTS - NOAA Tides & Currents, accessed June 17, 2025, https://tidesandcurrents.noaa.gov/ports/index.html?port=hr
+API Info page - National Water Prediction Service - NOAA, accessed June 17, 2025, https://water.noaa.gov/about/api
+API - NOAA Scientific Computing System, accessed June 17, 2025, https://scsshore.noaa.gov/svc/API
+New York Geographic Information Gateway, accessed June 17, 2025, https://opdgig.dos.ny.gov/search?collection=appAndMap&layout=grid&tags=marine%2520transportation
+Hudson River Shoreline Survey | NYS GIS Clearinghouse Data, accessed June 17, 2025, https://data.gis.ny.gov/datasets/nysdec::hudson-river-shoreline-survey/about
+Hudson River Shoreline Survey | NYS GIS Clearinghouse Data, accessed June 17, 2025, https://data.gis.ny.gov/datasets/nysdec::hudson-river-shoreline-survey
+Hudson River Estuary Bathymetry | New York Geographic Information Gateway, accessed June 17, 2025, https://opdgig.dos.ny.gov/datasets/hudson-river-estuary-bathymetry/about
+MarineTraffic: Global Ship Tracking Intelligence | AIS Marine Traffic, accessed June 17, 2025, https://www.marinetraffic.com/
+API Services - MarineTraffic, accessed June 17, 2025, https://support.marinetraffic.com/en/articles/9552659-api-services
+Access ship and position data via the API | AIS Marine Traffic, accessed June 17, 2025, https://www.marinetraffic.com/en/p/api-services
+Ship KINGSTON (Passenger) Registered in USA - Vessel details, Current position and Voyage information - Call Sign WDG9232 | AIS Marine Traffic, accessed June 17, 2025, https://www.marinetraffic.com/da/ais/details/ships/shipid:9006796
+Port of NEW YORK (US NYC) details - Departures, Expected Arrivals and Port Calls | AIS MarineTraffic, accessed June 17, 2025, https://www.marinetraffic.com/en/ais/details/ports/137?name=NEW-YORK&country=USA
+Details for AIS Station New York, United States of America - VesselFinder, accessed June 17, 2025, https://stations.vesselfinder.com/stations/6846
+Get an overview of your API Services - MarineTraffic, accessed June 17, 2025, https://support.marinetraffic.com/en/articles/9552798-get-an-overview-of-your-api-services
+Port of KINGSTON (US KG8) details - Departures, Expected Arrivals and Port Calls | AIS MarineTraffic, accessed June 17, 2025, https://www.marinetraffic.com/en/ais/details/ports/9895?name=KINGSTON&country=USA
+VesselFinder | Bellingcat's Online Investigation Toolkit - GitBook, accessed June 17, 2025, https://bellingcat.gitbook.io/toolkit/more/all-tools/vesselfinder
+Satellite Ship Position and Voyage data - AIS API - VesselFinder, accessed June 17, 2025, https://www.vesselfinder.com/vessel-positions-api
+Port of New York (United States (USA)) - Arrivals, Departures, Expected vessels - VesselFinder, accessed June 17, 2025, https://www.vesselfinder.com/ports/USNYC001
+accessed December 31, 1969, https://www.vesselfinder.com/api
